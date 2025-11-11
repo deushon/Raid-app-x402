@@ -16,7 +16,55 @@
     </header>
 
     <main>
-      <section class="panel">
+      <section class="top-layout">
+        <div class="panel commands-panel">
+          <h2>Demo Actions</h2>
+          <div class="commands">
+            <form id="dance-form">
+              <h3>Dance</h3>
+              <label>
+                Dancers
+                <select name="quantity">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <button type="submit">Send</button>
+              <div id="dance-message" class="message"></div>
+            </form>
+
+            <form id="cola-form">
+              <h3>Buy Cola</h3>
+              <label>
+                Latitude
+                <input name="lat" type="number" step="0.0001" required />
+              </label>
+              <label>
+                Longitude
+                <input name="lng" type="number" step="0.0001" required />
+              </label>
+              <label>
+                Quantity
+                <input name="quantity" type="number" min="1" value="1" required />
+              </label>
+              <button type="submit">Send</button>
+              <div id="cola-message" class="message"></div>
+            </form>
+          </div>
+        </div>
+
+        <div class="panel map-panel">
+          <header class="panel-header">
+            <h2>Robots Overview</h2>
+            <button id="refresh-all" type="button">Refresh All</button>
+          </header>
+          <div id="robots-map" class="map"></div>
+          <div id="robots-list" class="robots-list"></div>
+        </div>
+      </section>
+
+      <section class="panel register-panel">
         <h2>Register Robot</h2>
         <form id="robot-form">
           <label>
@@ -38,55 +86,6 @@
           <button type="submit">Add Robot</button>
         </form>
         <div id="robot-form-message" class="message"></div>
-      </section>
-
-      <section class="panel robots-panel">
-        <header class="panel-header">
-          <h2>Robots</h2>
-          <button id="refresh-all" type="button">Refresh All</button>
-        </header>
-        <div id="robots-list" class="robots-list"></div>
-        <div class="map-wrapper">
-          <h3>Map</h3>
-          <div id="robots-map" class="map"></div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Commands</h2>
-        <div class="commands">
-          <form id="dance-form">
-            <h3>Dance</h3>
-            <label>
-              Dancers
-              <select name="quantity">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="all">All</option>
-              </select>
-            </label>
-            <button type="submit">Send</button>
-            <div id="dance-message" class="message"></div>
-          </form>
-
-          <form id="cola-form">
-            <h3>Buy Cola</h3>
-            <label>
-              Latitude
-              <input name="lat" type="number" step="0.0001" required />
-            </label>
-            <label>
-              Longitude
-              <input name="lng" type="number" step="0.0001" required />
-            </label>
-            <label>
-              Quantity
-              <input name="quantity" type="number" min="1" value="1" required />
-            </label>
-            <button type="submit">Send</button>
-            <div id="cola-message" class="message"></div>
-          </form>
-        </div>
       </section>
     </main>
 

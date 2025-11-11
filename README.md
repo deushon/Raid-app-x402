@@ -143,9 +143,5 @@ If a robot is configured as `requiresX402`, all outgoing requests will include `
 - Errors bubble through the Express error handler for consistent responses.
 - Comments and logging are in English for broader team collaboration, per requirements.
 
-## License
-
-MIT © 2025 Ainex
-
 [^1]: [X402 Next.js template from Solana](https://templates.solana.com/ru/x402-template)
 

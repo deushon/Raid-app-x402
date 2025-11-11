@@ -131,25 +131,30 @@ const formatLocation = (location) => {
 };
 
 const renderRobot = (robot) => `
-  <article class="robot-card" data-robot-id="${robot.id}">
-    <header>
-      <h3>${robot.name}</h3>
-      <p class="robot-meta">${robot.host}:${robot.port}</p>
-    </header>
-    <div class="robot-body">
-      <div>${formatStatus(robot)}</div>
+  <details class="robot-card" data-robot-id="${robot.id}">
+    <summary>
+      <div class="robot-summary">
+        <div class="robot-summary-main">
+          <span class="robot-name">${robot.name}</span>
+          ${formatStatus(robot)}
+        </div>
+        <span class="robot-address">${robot.host}:${robot.port}</span>
+      </div>
+      <span class="robot-toggle" aria-hidden="true">▾</span>
+    </summary>
+    <div class="robot-details">
       <p>${robot.status.message || 'No message reported.'}</p>
-      <p><strong>Location:</strong> ${formatLocation(robot.location)}</p>
+      <div class="robot-stats">
+        <span><strong>Location:</strong> ${formatLocation(robot.location)}</span>
+        <span><strong>Last check:</strong> ${robot.lastHealthCheckAt || 'never'}</span>
+      </div>
       <div class="methods">${formatMethods(robot)}</div>
-    </div>
-    <div class="robot-footer">
-      <p class="robot-meta">Last check: ${robot.lastHealthCheckAt || 'never'}</p>
-      <div class="actions">
+      <div class="robot-actions">
         <button data-action="refresh" data-id="${robot.id}">Refresh</button>
         <button data-action="remove" data-id="${robot.id}">Remove</button>
       </div>
     </div>
-  </article>
+  </details>
 `;
 
 const initMap = () => {
@@ -216,7 +221,7 @@ const renderRobots = async () => {
   try {
     const data = await api.listRobots();
     if (!data?.robots?.length) {
-      robotsList.innerHTML = '<p>No robots registered yet.</p>';
+      robotsList.innerHTML = '<p class="robots-list-empty">No robots registered yet.</p>';
       updateMapMarkers([]);
       return;
     }
