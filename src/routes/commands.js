@@ -9,8 +9,8 @@ const createCommandsRouter = ({ commandRouter }) => {
    *   post:
    *     tags:
    *       - Commands
-   *     summary: Dispatch dance routine
-   *     description: Selects one or more ready robots and triggers the dance command.
+   *     summary: Dispatch move_demo routine
+   *     description: Selects the requested number of ready robots with move_demo capability and executes the routine, handling x402 payment handshake if required.
    *     requestBody:
    *       required: true
    *       content:
@@ -19,7 +19,7 @@ const createCommandsRouter = ({ commandRouter }) => {
    *             $ref: '#/components/schemas/DanceCommandRequest'
    *     responses:
    *       200:
-   *         description: Command dispatch results.
+   *         description: Command dispatch results with payment metadata when applicable.
    *         content:
    *           application/json:
    *             schema:
@@ -38,28 +38,28 @@ const createCommandsRouter = ({ commandRouter }) => {
    *                       response:
    *                         type: object
    *                         nullable: true
+   *                       payment:
+   *                         type: object
+   *                         nullable: true
    *                       error:
    *                         type: string
    *                         nullable: true
    *       400:
-   *         description: Invalid mode provided.
-   *       404:
-   *         description: No robots ready to execute the command.
+   *         description: Invalid quantity provided.
+   *       409:
+   *         description: Not enough robots with the required capability.
    */
   router.post('/dance', async (req, res, next) => {
     try {
-      const { mode } = req.body;
-      if (!mode) {
-        return res.status(400).json({ error: 'Mode is required' });
+      const { quantity, mode } = req.body;
+      if (!quantity && !mode) {
+        return res.status(400).json({ error: 'Quantity is required' });
       }
-      const results = await commandRouter.dance({ mode });
+      const results = await commandRouter.dance({ quantity, mode });
       return res.json({ results });
     } catch (error) {
-      if (error.message.includes('No robots')) {
-        return res.status(404).json({ error: error.message });
-      }
-      if (error.message.includes('Dance mode')) {
-        return res.status(400).json({ error: error.message });
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
       }
       return next(error);
     }
@@ -100,8 +100,10 @@ const createCommandsRouter = ({ commandRouter }) => {
    *                   nullable: true
    *       400:
    *         description: Invalid location or quantity.
-   *       404:
-   *         description: No robots available to handle the task.
+   *       409:
+   *         description: No ready robots to fulfil the request.
+   *       422:
+   *         description: Unable to determine closest robot.
    */
   router.post('/buy-cola', async (req, res, next) => {
     try {
@@ -109,11 +111,8 @@ const createCommandsRouter = ({ commandRouter }) => {
       const result = await commandRouter.buyCola({ location, quantity });
       return res.json(result);
     } catch (error) {
-      if (error.message.includes('Location') || error.message.includes('Quantity')) {
-        return res.status(400).json({ error: error.message });
-      }
-      if (error.message.includes('No robots ready')) {
-        return res.status(404).json({ error: error.message });
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
       }
       return next(error);
     }

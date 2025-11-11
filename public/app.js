@@ -51,10 +51,10 @@ const api = {
     });
   },
 
-  dance(mode) {
+  dance(quantity) {
     return this.request('/api/commands/dance', {
       method: 'POST',
-      body: { mode },
+      body: { quantity },
     });
   },
 
@@ -291,11 +291,28 @@ robotForm.addEventListener('submit', async (event) => {
 danceForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(danceForm);
-  const mode = formData.get('mode');
+  const quantity = formData.get('quantity');
 
   try {
-    const result = await api.dance(mode);
-    setMessage(danceMessage, `Command dispatched. ${result.results.length} robots responded.`, 'success');
+    const result = await api.dance(quantity);
+    const successCount = result.results.filter((entry) => entry.status === 'success').length;
+    const failures = result.results.filter((entry) => entry.status !== 'success');
+    if (failures.length > 0) {
+      const firstFailure = failures[0];
+      setMessage(
+        danceMessage,
+        `Command dispatched. ${successCount}/${result.results.length} completed. First failure: ${
+          firstFailure.error || 'unknown error'
+        }`,
+        'error',
+      );
+    } else {
+      setMessage(
+        danceMessage,
+        `Command dispatched. ${successCount}/${result.results.length} robots completed move demo.`,
+        'success',
+      );
+    }
   } catch (error) {
     setMessage(danceMessage, error.message, 'error');
   }

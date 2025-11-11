@@ -17,19 +17,24 @@ const parseArgs = (rawArgs = []) => {
   const args = {};
   for (let index = 0; index < rawArgs.length; index += 1) {
     const token = rawArgs[index];
+    if (token === '--') {
+      continue;
+    }
+
     if (!token.startsWith('--')) {
       continue;
     }
 
-    const [keyPart, valuePart] = token.slice(2).split('=');
-    if (valuePart !== undefined) {
-      args[keyPart] = valuePart;
+    const [keyPart, ...valueParts] = token.slice(2).split('=');
+    if (valueParts.length > 0) {
+      const value = valueParts.join('=');
+      args[keyPart] = value.replace(/^"(.*)"$/, '$1');
       continue;
     }
 
     const nextToken = rawArgs[index + 1];
     if (nextToken && !nextToken.startsWith('--')) {
-      args[keyPart] = nextToken;
+      args[keyPart] = nextToken.replace(/^"(.*)"$/, '$1');
       index += 1;
     } else {
       args[keyPart] = true;
@@ -66,6 +71,11 @@ const loadConfig = (argv = []) => {
       privateKey,
       walletId,
       gatewayUrl: args['x402-gateway-url'] || process.env.X402_GATEWAY_URL || 'https://api.corbits.dev',
+      paymentEndpoint: args['x402-payment-endpoint'] || process.env.X402_PAYMENT_ENDPOINT || '/v1/payments',
+      paymentTimeoutMs: toNumber(
+        args['x402-payment-timeout'] || process.env.X402_PAYMENT_TIMEOUT_MS,
+        10000,
+      ),
     },
     robots: {
       healthTimeoutMs: toNumber(args['robot-health-timeout'] || process.env.ROBOT_HEALTH_TIMEOUT_MS, 5000),

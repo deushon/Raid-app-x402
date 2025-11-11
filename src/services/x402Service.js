@@ -3,10 +3,18 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 
 class X402Service {
-  constructor({ privateKey, walletId, gatewayUrl }) {
+  constructor({
+    privateKey,
+    walletId,
+    gatewayUrl,
+    paymentEndpoint = '/v1/payments',
+    paymentTimeoutMs = 10000,
+  }) {
     this.privateKey = privateKey;
     this.walletId = walletId;
     this.gatewayUrl = gatewayUrl;
+    this.paymentEndpoint = paymentEndpoint;
+    this.paymentTimeoutMs = paymentTimeoutMs;
   }
 
   isConfigured() {
@@ -69,6 +77,66 @@ class X402Service {
       timeout,
       headers: signedHeaders,
     });
+  }
+
+  resolveGatewayUrl(endpoint) {
+    if (!this.gatewayUrl) {
+      throw new Error('x402 gateway URL is not configured');
+    }
+    if (!endpoint) {
+      return this.gatewayUrl;
+    }
+    try {
+      const resolved = new URL(endpoint, this.gatewayUrl);
+      return resolved.toString();
+    } catch (error) {
+      logger.error('Failed to resolve x402 gateway URL', { endpoint, error: error.message });
+      throw error;
+    }
+  }
+
+  async settleInvoice(invoice) {
+    if (!this.isConfigured()) {
+      throw new Error('x402 private key is not configured');
+    }
+
+    if (!invoice) {
+      throw new Error('Payment invoice payload is missing');
+    }
+
+    const { reference, receiver, amount, asset } = invoice;
+    const numericAmount = typeof amount === 'string' ? Number(amount) : amount;
+    if (!reference || !receiver || Number.isNaN(numericAmount) || !Number.isFinite(numericAmount) || !asset) {
+      throw new Error('Payment invoice is missing required fields (reference, receiver, amount, asset)');
+    }
+
+    const payload = {
+      reference,
+      receiver,
+      amount: numericAmount,
+      asset,
+    };
+
+    const url = this.resolveGatewayUrl(this.paymentEndpoint);
+    logger.info('Settling x402 invoice', { url, reference, receiver, amount, asset });
+
+    try {
+      const response = await this.sendSecuredRequest({
+        url,
+        method: 'POST',
+        data: payload,
+        timeout: this.paymentTimeoutMs,
+      });
+      return response.data;
+    } catch (error) {
+      logger.error('x402 payment settlement failed', {
+        reference,
+        receiver,
+        status: error.response?.status,
+        error: error.message,
+      });
+      throw error;
+    }
   }
 
   createHttpClient(baseURL, defaultOptions = {}) {

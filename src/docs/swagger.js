@@ -91,9 +91,9 @@ const swaggerDefinition = {
       },
       DanceCommandRequest: {
         type: 'object',
-        required: ['mode'],
+        required: ['quantity'],
         properties: {
-          mode: {
+          quantity: {
             oneOf: [
               { type: 'string', enum: ['all'] },
               { type: 'integer', enum: [1, 2] },

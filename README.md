@@ -35,6 +35,8 @@ Environment variables can be provided via a `.env` file (copy `config/env.exampl
 | `X402_PRIVATE_KEY` | `--x402-private-key` | Private key used to sign x402 requests | _required for secure robots_ |
 | `X402_WALLET_ID` | `--x402-wallet-id` | Optional wallet identifier header for x402 integrations | _none_ |
 | `X402_GATEWAY_URL` | `--x402-gateway-url` | Base URL for upstream x402 gateways | `https://api.corbits.dev` |
+| `X402_PAYMENT_ENDPOINT` | `--x402-payment-endpoint` | Relative path for payment settlements | `/v1/payments` |
+| `X402_PAYMENT_TIMEOUT_MS` | `--x402-payment-timeout` | Payment settlement timeout (ms) | `10000` |
 | `ROBOT_HEALTH_TIMEOUT_MS` | `--robot-health-timeout` | Health-check timeout per robot (ms) | `5000` |
 | `ROBOT_COMMAND_TIMEOUT_MS` | `--robot-command-timeout` | Command dispatch timeout (ms) | `8000` |
 | `ROBOT_HEALTH_ENDPOINT` | `--robot-health-endpoint` | Public health endpoint path | `/health` |
@@ -57,9 +59,11 @@ npm run dev        # run in watch mode with nodemon
 | `PUT` | `/api/robots/{id}` | Update robot metadata. |
 | `POST` | `/api/robots/{id}/refresh` | Trigger an immediate health check. |
 | `DELETE` | `/api/robots/{id}` | Remove a robot from the registry. |
-| `POST` | `/api/commands/dance` | Dispatch the dance command `{ mode: 1 | 2 | "all" }`. |
+| `POST` | `/api/commands/dance` | Dispatch the move demo command `{ quantity: 1 | 2 | "all" }` with x402 handshake. |
 | `POST` | `/api/commands/buy-cola` | Dispatch a logistics task `{ location, quantity }`. |
 | `POST` | `/api/payments/x402` | Example endpoint protected by x402 middleware. Post payment callbacks here. |
+
+> `POST /api/commands/dance` will automatically initiate the `/api/v1/robot/move_demo` flow on each selected robot, opening (and confirming) the x402 payment session when a reference is returned.
 
 ### Web Console
 
