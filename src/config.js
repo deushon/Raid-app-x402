@@ -76,6 +76,26 @@ const loadConfig = (argv = []) => {
         args['x402-payment-timeout'] || process.env.X402_PAYMENT_TIMEOUT_MS,
         10000,
       ),
+      paymentProvider: (args['x402-payment-provider'] || process.env.X402_PAYMENT_PROVIDER || 'gateway').toLowerCase(),
+      confirmation: {
+        maxAttempts: toNumber(
+          args['x402-confirm-attempts'] || process.env.X402_CONFIRM_ATTEMPTS,
+          5,
+        ),
+        delayMs: toNumber(
+          args['x402-confirm-delay'] || process.env.X402_CONFIRM_DELAY_MS,
+          2000,
+        ),
+      },
+      solana: {
+        rpcUrl: args['x402-solana-rpc-url'] || process.env.X402_SOLANA_RPC_URL || null,
+        commitment: args['x402-solana-commitment'] || process.env.X402_SOLANA_COMMITMENT || 'confirmed',
+        minConfirmations: toNumber(
+          args['x402-solana-min-confirmations'] || process.env.X402_SOLANA_MIN_CONFIRMATIONS,
+          1,
+        ),
+        secretKey: args['x402-solana-secret-key'] || process.env.X402_SOLANA_SECRET_KEY || privateKey,
+      },
     },
     robots: {
       healthTimeoutMs: toNumber(args['robot-health-timeout'] || process.env.ROBOT_HEALTH_TIMEOUT_MS, 5000),

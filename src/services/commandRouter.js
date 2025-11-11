@@ -16,7 +16,19 @@ const calculateDistance = (a, b) => {
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+const delay = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
 const createCommandRouter = ({ config, registry, x402Service }) => {
+  const confirmationConfig = config.x402?.confirmation || {};
+  const confirmMaxAttempts = Number.isInteger(confirmationConfig.maxAttempts)
+    ? Math.max(1, confirmationConfig.maxAttempts)
+    : 5;
+  const confirmDelayMs = Number.isFinite(confirmationConfig.delayMs)
+    ? Math.max(200, confirmationConfig.delayMs)
+    : 2000;
+
   const robotSupportsMoveDemo = (robot) => {
     const methods = robot.status?.availableMethods || [];
     return methods.some((method) => {
@@ -53,6 +65,8 @@ const createCommandRouter = ({ config, registry, x402Service }) => {
     logger.info('Dispatching command to robot', {
       robotId: robot.id,
       endpoint,
+      payload,
+      headers,
     });
 
     const executor = robot.requiresX402
@@ -60,11 +74,29 @@ const createCommandRouter = ({ config, registry, x402Service }) => {
       : () => axios(requestOptions);
 
     try {
-      return await executor();
+      const response = await executor();
+      logger.info('Robot response received', {
+        robotId: robot.id,
+        endpoint,
+        status: response.status,
+        data: response.data,
+      });
+      return response;
     } catch (error) {
       if (error.response) {
+        logger.warn('Robot responded with error status', {
+          robotId: robot.id,
+          endpoint,
+          status: error.response.status,
+          data: error.response.data,
+        });
         return error.response;
       }
+      logger.error('Robot command request failed', {
+        robotId: robot.id,
+        endpoint,
+        error: error.message,
+      });
       throw error;
     }
   };
@@ -146,6 +178,7 @@ const createCommandRouter = ({ config, registry, x402Service }) => {
     let settlement;
     try {
       settlement = await x402Service.settleInvoice(invoice);
+      logger.info('Payment settlement result', settlement);
     } catch (error) {
       return {
         status: 'failed',
@@ -157,43 +190,74 @@ const createCommandRouter = ({ config, registry, x402Service }) => {
       };
     }
 
-    const paymentResponse = await driveCommand({
-      robot,
-      endpoint,
-      payload,
-      headers: {
-        'X-X402-Reference': reference,
-      },
-    });
+    let attempt = 0;
+    let finalResponse = null;
 
-    if (!paymentResponse) {
+    while (attempt < confirmMaxAttempts) {
+      attempt += 1;
+      const paymentResponse = await driveCommand({
+        robot,
+        endpoint,
+        payload,
+        headers: {
+          'X-X402-Reference': reference,
+        },
+      });
+
+      finalResponse = paymentResponse;
+
+      if (paymentResponse) {
+        logger.info('Payment confirmation attempt result', {
+          attempt,
+          status: paymentResponse.status,
+          data: paymentResponse.data,
+        });
+      }
+
+      if (!paymentResponse || paymentResponse.status === 200) {
+        break;
+      }
+
+      if (paymentResponse.status !== 402) {
+        break;
+      }
+
+      if (attempt < confirmMaxAttempts) {
+        await delay(confirmDelayMs);
+      }
+    }
+
+    if (!finalResponse) {
       return {
         status: 'failed',
         stage: 'payment_confirmation',
         error: 'Robot did not respond to payment confirmation',
         invoice,
         payment: settlement,
+        attempts: attempt,
       };
     }
 
-    if (paymentResponse.status === 200) {
+    if (finalResponse.status === 200) {
       return {
         status: 'success',
         stage: 'payment_confirmed',
-        response: paymentResponse.data,
+        response: finalResponse.data,
         payment: settlement,
         invoice,
+        attempts: attempt,
       };
     }
 
     return {
       status: 'failed',
       stage: 'payment_confirmation',
-      error: paymentResponse.data?.error || paymentResponse.data?.message || 'Robot rejected payment confirmation',
-      httpStatus: paymentResponse.status,
-      response: paymentResponse.data,
+      error: finalResponse.data?.error || finalResponse.data?.message || 'Robot rejected payment confirmation',
+      httpStatus: finalResponse.status,
+      response: finalResponse.data,
       invoice,
       payment: settlement,
+      attempts: attempt,
     };
   };
 

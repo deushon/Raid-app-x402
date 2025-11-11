@@ -9,16 +9,43 @@ class X402Service {
     gatewayUrl,
     paymentEndpoint = '/v1/payments',
     paymentTimeoutMs = 10000,
+    paymentProvider = 'gateway',
+    solana = {},
   }) {
     this.privateKey = privateKey;
     this.walletId = walletId;
     this.gatewayUrl = gatewayUrl;
     this.paymentEndpoint = paymentEndpoint;
     this.paymentTimeoutMs = paymentTimeoutMs;
+    this.paymentProvider = paymentProvider;
+    this.solanaConfig = solana;
+    this.directPaymentProvider = null;
+
+    if (this.paymentProvider === 'solana-direct') {
+      try {
+        // eslint-disable-next-line global-require
+        const SolanaDirectPaymentProvider = require('./payments/solanaDirectProvider');
+        this.directPaymentProvider = new SolanaDirectPaymentProvider({
+          rpcUrl: this.solanaConfig.rpcUrl,
+          commitment: this.solanaConfig.commitment,
+          minConfirmations: this.solanaConfig.minConfirmations,
+          secretKey: this.solanaConfig.secretKey || this.privateKey,
+        });
+      } catch (error) {
+        logger.error('Failed to initialise Solana direct payment provider', { error: error.message });
+        this.directPaymentProvider = null;
+      }
+    }
   }
 
   isConfigured() {
-    return Boolean(this.privateKey);
+    if (!this.privateKey) {
+      return false;
+    }
+    if (this.paymentProvider === 'solana-direct') {
+      return Boolean(this.directPaymentProvider && this.directPaymentProvider.isReady());
+    }
+    return true;
   }
 
   buildSignature(payload) {
@@ -110,6 +137,13 @@ class X402Service {
       throw new Error('Payment invoice is missing required fields (reference, receiver, amount, asset)');
     }
 
+    if (this.paymentProvider === 'solana-direct') {
+      if (!this.directPaymentProvider) {
+        throw new Error('Solana direct payment provider is not initialised');
+      }
+      return this.directPaymentProvider.settle(invoice);
+    }
+
     const payload = {
       reference,
       receiver,
@@ -118,7 +152,10 @@ class X402Service {
     };
 
     const url = this.resolveGatewayUrl(this.paymentEndpoint);
-    logger.info('Settling x402 invoice', { url, reference, receiver, amount, asset });
+    logger.info('Settling x402 invoice', {
+      url,
+      payload,
+    });
 
     try {
       const response = await this.sendSecuredRequest({
@@ -127,13 +164,21 @@ class X402Service {
         data: payload,
         timeout: this.paymentTimeoutMs,
       });
-      return response.data;
+      logger.info('x402 gateway settlement response', {
+        status: response.status,
+        data: response.data,
+      });
+      return {
+        provider: 'gateway',
+        ...response.data,
+      };
     } catch (error) {
       logger.error('x402 payment settlement failed', {
         reference,
         receiver,
         status: error.response?.status,
         error: error.message,
+        data: error.response?.data,
       });
       throw error;
     }

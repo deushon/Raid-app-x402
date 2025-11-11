@@ -5,6 +5,7 @@ Node.js service orchestrating x402-enabled payments and robot control flows. It 
 ## Features
 
 - x402-ready request signing for outgoing robot commands and verification middleware for incoming payment callbacks.
+- Pluggable x402 payment providers (external facilitator or direct Solana settlement).
 - Health monitoring pipeline that polls robot `/health` (and `/helth` for legacy setups) endpoints with optional x402 fallback.
 - In-memory robot registry with status, available method discovery, and location tracking.
 - Command router that distributes work across available robots, including proximity-based selection for logistics scenarios.
@@ -37,6 +38,13 @@ Environment variables can be provided via a `.env` file (copy `config/env.exampl
 | `X402_GATEWAY_URL` | `--x402-gateway-url` | Base URL for upstream x402 gateways | `https://api.corbits.dev` |
 | `X402_PAYMENT_ENDPOINT` | `--x402-payment-endpoint` | Relative path for payment settlements | `/v1/payments` |
 | `X402_PAYMENT_TIMEOUT_MS` | `--x402-payment-timeout` | Payment settlement timeout (ms) | `10000` |
+| `X402_PAYMENT_PROVIDER` | `--x402-payment-provider` | `gateway` (default) or `solana-direct` | `gateway` |
+| `X402_CONFIRM_ATTEMPTS` | `--x402-confirm-attempts` | Retries when waiting for robot to observe payment | `5` |
+| `X402_CONFIRM_DELAY_MS` | `--x402-confirm-delay` | Delay between payment confirmation attempts (ms) | `2000` |
+| `X402_SOLANA_RPC_URL` | `--x402-solana-rpc-url` | RPC endpoint for direct Solana settlements | _none_ |
+| `X402_SOLANA_COMMITMENT` | `--x402-solana-commitment` | Solana commitment level (`processed` \| `confirmed` \| `finalized`) | `confirmed` |
+| `X402_SOLANA_MIN_CONFIRMATIONS` | `--x402-solana-min-confirmations` | Additional confirmations to await after send | `1` |
+| `X402_SOLANA_SECRET_KEY` | `--x402-solana-secret-key` | Base64/base58/JSON secret key for SOL transfers (defaults to `X402_PRIVATE_KEY`) | _none_ |
 | `ROBOT_HEALTH_TIMEOUT_MS` | `--robot-health-timeout` | Health-check timeout per robot (ms) | `5000` |
 | `ROBOT_COMMAND_TIMEOUT_MS` | `--robot-command-timeout` | Command dispatch timeout (ms) | `8000` |
 | `ROBOT_HEALTH_ENDPOINT` | `--robot-health-endpoint` | Public health endpoint path | `/health` |
@@ -64,6 +72,19 @@ npm run dev        # run in watch mode with nodemon
 | `POST` | `/api/payments/x402` | Example endpoint protected by x402 middleware. Post payment callbacks here. |
 
 > `POST /api/commands/dance` will automatically initiate the `/api/v1/robot/move_demo` flow on each selected robot, opening (and confirming) the x402 payment session when a reference is returned.
+
+### Payment Providers
+
+By default, the service delegates settlements to an external x402 gateway (facilitator). To run without a facilitator, switch to the built-in Solana sender:
+
+```bash
+X402_PAYMENT_PROVIDER=solana-direct \
+X402_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com \
+X402_SOLANA_SECRET_KEY=<base64-or-json-secret> \
+npm run start
+```
+
+The direct provider creates on-chain SOL transfers via `@solana/web3.js`, waiting for the configured confirmations before completing the robot command. This mirrors the optional architecture described in the x402 examples, where validation can rely solely on blockchain state instead of a facilitator service.[^1]
 
 ### Web Console
 
@@ -121,4 +142,10 @@ If a robot is configured as `requiresX402`, all outgoing requests will include `
 - All logs emit JSON-friendly structured strings.
 - Errors bubble through the Express error handler for consistent responses.
 - Comments and logging are in English for broader team collaboration, per requirements.
+
+## License
+
+MIT © 2025 Ainex
+
+[^1]: [X402 Next.js template from Solana](https://templates.solana.com/ru/x402-template)
 
