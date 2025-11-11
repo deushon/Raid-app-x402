@@ -45,6 +45,9 @@ Environment variables can be provided via a `.env` file (copy `config/env.exampl
 | `X402_SOLANA_COMMITMENT` | `--x402-solana-commitment` | Solana commitment level (`processed` \| `confirmed` \| `finalized`) | `confirmed` |
 | `X402_SOLANA_MIN_CONFIRMATIONS` | `--x402-solana-min-confirmations` | Additional confirmations to await after send | `1` |
 | `X402_SOLANA_SECRET_KEY` | `--x402-solana-secret-key` | Base64/base58/JSON secret key for SOL transfers (defaults to `X402_PRIVATE_KEY`) | _none_ |
+| `COMMAND_DANCE_STRATEGY` | `--command-dance-strategy` | Executor selection strategy for `dance` (`lowest_price`, `sequential`, `random`) | `lowest_price` |
+| `COMMAND_BUY_COLA_STRATEGY` | `--command-buy-cola-strategy` | Executor selection strategy for `buy-cola` (`closest`, `lowest_price`) | `closest` |
+| `PRICING_MARKUP_PERCENT` | `--pricing-markup-percent` | Markup percentage added on top of robot costs for suggested pricing | `10` |
 | `ROBOT_HEALTH_TIMEOUT_MS` | `--robot-health-timeout` | Health-check timeout per robot (ms) | `5000` |
 | `ROBOT_COMMAND_TIMEOUT_MS` | `--robot-command-timeout` | Command dispatch timeout (ms) | `8000` |
 | `ROBOT_HEALTH_ENDPOINT` | `--robot-health-endpoint` | Public health endpoint path | `/health` |
@@ -72,6 +75,7 @@ npm run dev        # run in watch mode with nodemon
 | `POST` | `/api/payments/x402` | Example endpoint protected by x402 middleware. Post payment callbacks here. |
 
 > `POST /api/commands/dance` will automatically initiate the `/api/v1/robot/move_demo` flow on each selected robot, opening (and confirming) the x402 payment session when a reference is returned.
+> Command responses include a `summary` object describing the executor strategy, raw robot costs, and the suggested client price after applying the configured markup.
 
 ### Payment Providers
 
@@ -85,6 +89,12 @@ npm run start
 ```
 
 The direct provider creates on-chain SOL transfers via `@solana/web3.js`, waiting for the configured confirmations before completing the robot command. This mirrors the optional architecture described in the x402 examples, where validation can rely solely on blockchain state instead of a facilitator service.[^1]
+
+### Executor Selection & Pricing
+
+- `COMMAND_DANCE_STRATEGY` controls how robots are chosen for the `dance` command. The default `lowest_price` ranks robots by the price advertised in their health metadata (`availableMethods[].pricing`). Fallback strategies include `sequential` (keep registration order) and `random`.
+- `COMMAND_BUY_COLA_STRATEGY` defaults to `closest`, selecting the robot geographically nearest to the requested location. Set it to `lowest_price` to prefer cheaper vendors when pricing is available.
+- `PRICING_MARKUP_PERCENT` applies a markup on top of the sum of robot costs when reporting suggested prices in command responses. The default adds 10 %, so a 0.1 SOL dance results in a suggested client charge of 0.11 SOL.
 
 ### Web Console
 
@@ -135,6 +145,8 @@ If a robot is configured as `requiresX402`, all outgoing requests will include `
 - **Persistence:** swap the in-memory registry with a database-backed implementation.
 - **Automation:** schedule periodic health checks with a job runner (BullMQ, Agenda, etc.).
 - **Commands:** add new command handlers via `src/services/commandRouter.js` and expose routes inside `src/routes/commands.js`.
+- **Executor strategies:** tweak `COMMAND_DANCE_STRATEGY` / `COMMAND_BUY_COLA_STRATEGY` to favour the cheapest or closest robots without touching code.
+- **Pricing:** adjust `PRICING_MARKUP_PERCENT` to control the margin added on top of the robots’ advertised costs when returning suggested client prices.
 - **Security:** protect the REST API with authentication middleware or API keys before production use.
 
 ### Development Notes

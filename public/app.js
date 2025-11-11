@@ -130,6 +130,13 @@ const formatLocation = (location) => {
   return `${lat}, ${lng}`;
 };
 
+const formatAmount = (value, digits = 6) => {
+  if (typeof value !== 'number' || Number.isNaN(value) || !Number.isFinite(value)) {
+    return null;
+  }
+  return value.toFixed(digits);
+};
+
 const renderRobot = (robot) => `
   <details class="robot-card" data-robot-id="${robot.id}">
     <summary>
@@ -300,21 +307,26 @@ danceForm.addEventListener('submit', async (event) => {
 
   try {
     const result = await api.dance(quantity);
-    const successCount = result.results.filter((entry) => entry.status === 'success').length;
-    const failures = result.results.filter((entry) => entry.status !== 'success');
+    const responses = Array.isArray(result.results) ? result.results : [];
+    const successCount = responses.filter((entry) => entry.status === 'success').length;
+    const failures = responses.filter((entry) => entry.status !== 'success');
+    const suggestedPrice = formatAmount(result.summary?.suggestedPrice);
+    const priceMessage = suggestedPrice ? ` Suggested price: ${suggestedPrice} SOL.` : '';
+    const strategyMessage = result.summary?.selectionStrategy
+      ? ` Strategy: ${result.summary.selectionStrategy}.`
+      : '';
     if (failures.length > 0) {
       const firstFailure = failures[0];
       setMessage(
         danceMessage,
-        `Command dispatched. ${successCount}/${result.results.length} completed. First failure: ${
-          firstFailure.error || 'unknown error'
-        }`,
+        `Command dispatched. ${successCount}/${responses.length} completed. `
+          + `First failure: ${firstFailure.error || 'unknown error'}.${priceMessage}${strategyMessage}`,
         'error',
       );
     } else {
       setMessage(
         danceMessage,
-        `Command dispatched. ${successCount}/${result.results.length} robots completed move demo.`,
+        `Command dispatched. ${successCount}/${responses.length} robots completed move demo.${priceMessage}${strategyMessage}`,
         'success',
       );
     }
@@ -336,11 +348,16 @@ colaForm.addEventListener('submit', async (event) => {
 
   try {
     const result = await api.buyCola(payload);
-    setMessage(
-      colaMessage,
-      `Command dispatched to robot ${result.robotId} with status ${result.status}.`,
-      'success',
-    );
+    const commandResult = result.result || {};
+    const summary = result.summary || {};
+    const suggestedPrice = formatAmount(summary?.suggestedPrice);
+    const priceMessage = suggestedPrice ? ` Suggested price: ${suggestedPrice} SOL.` : '';
+    const status = commandResult.status || 'unknown';
+    const robotId = commandResult.robotId || 'unknown';
+    const strategy = summary.selectionStrategy || commandResult.selection?.strategy;
+    const strategyMessage = strategy ? ` Strategy: ${strategy}.` : '';
+    const message = `Command dispatched to robot ${robotId} with status ${status}.${priceMessage}${strategyMessage}`;
+    setMessage(colaMessage, message, status === 'success' ? 'success' : 'error');
   } catch (error) {
     setMessage(colaMessage, error.message, 'error');
   }

@@ -97,6 +97,24 @@ const loadConfig = (argv = []) => {
         secretKey: args['x402-solana-secret-key'] || process.env.X402_SOLANA_SECRET_KEY || privateKey,
       },
     },
+    commands: {
+      dance: {
+        selectionStrategy: (args['command-dance-strategy']
+          || process.env.COMMAND_DANCE_STRATEGY
+          || 'lowest_price').toLowerCase(),
+      },
+      buyCola: {
+        selectionStrategy: (args['command-buy-cola-strategy']
+          || process.env.COMMAND_BUY_COLA_STRATEGY
+          || 'closest').toLowerCase(),
+      },
+    },
+    pricing: {
+      markupPercent: toNumber(
+        args['pricing-markup-percent'] || process.env.PRICING_MARKUP_PERCENT,
+        10,
+      ),
+    },
     robots: {
       healthTimeoutMs: toNumber(args['robot-health-timeout'] || process.env.ROBOT_HEALTH_TIMEOUT_MS, 5000),
       commandTimeoutMs: toNumber(args['robot-command-timeout'] || process.env.ROBOT_COMMAND_TIMEOUT_MS, 8000),

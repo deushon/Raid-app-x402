@@ -44,6 +44,17 @@ const createCommandsRouter = ({ commandRouter }) => {
    *                       error:
    *                         type: string
    *                         nullable: true
+    *                 summary:
+    *                   type: object
+    *                   properties:
+    *                     selectionStrategy:
+    *                       type: string
+    *                     markupPercent:
+    *                       type: number
+    *                     totalRobotCost:
+    *                       type: number
+    *                     suggestedPrice:
+    *                       type: number
    *       400:
    *         description: Invalid quantity provided.
    *       409:
@@ -52,11 +63,8 @@ const createCommandsRouter = ({ commandRouter }) => {
   router.post('/dance', async (req, res, next) => {
     try {
       const { quantity, mode } = req.body;
-      if (!quantity && !mode) {
-        return res.status(400).json({ error: 'Quantity is required' });
-      }
-      const results = await commandRouter.dance({ quantity, mode });
-      return res.json({ results });
+      const result = await commandRouter.dance({ quantity, mode });
+      return res.json(result);
     } catch (error) {
       if (error.statusCode) {
         return res.status(error.statusCode).json({ error: error.message });
@@ -87,17 +95,36 @@ const createCommandsRouter = ({ commandRouter }) => {
    *             schema:
    *               type: object
    *               properties:
-   *                 robotId:
-   *                   type: string
-   *                 status:
-   *                   type: string
-   *                   enum: [success, failed]
-   *                 response:
-   *                   type: object
-   *                   nullable: true
-   *                 error:
-   *                   type: string
-   *                   nullable: true
+    *                 result:
+    *                   type: object
+    *                   properties:
+    *                     robotId:
+    *                       type: string
+    *                     status:
+    *                       type: string
+    *                       enum: [success, failed]
+    *                     response:
+    *                       type: object
+    *                       nullable: true
+    *                     error:
+    *                       type: string
+    *                       nullable: true
+    *                     pricing:
+    *                       type: object
+    *                       nullable: true
+    *                 summary:
+    *                   type: object
+    *                   properties:
+    *                     selectionStrategy:
+    *                       type: string
+    *                     markupPercent:
+    *                       type: number
+    *                     baseAmount:
+    *                       type: number
+    *                       nullable: true
+    *                     suggestedPrice:
+    *                       type: number
+    *                       nullable: true
    *       400:
    *         description: Invalid location or quantity.
    *       409:
