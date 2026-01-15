@@ -9,7 +9,10 @@ const RobotRegistry = require('./services/robotRegistry');
 const createCommandRouter = require('./services/commandRouter');
 const createRobotsRouter = require('./routes/robots');
 const createCommandsRouter = require('./routes/commands');
+const createClientRouter = require('./routes/client');
+const createAdminRouter = require('./routes/admin');
 const createX402PaymentMiddleware = require('./middleware/x402Payment');
+const createAuthMiddleware = require('./middleware/auth');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 
 const bootstrap = () => {
@@ -26,7 +29,15 @@ const bootstrap = () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  app.use('/ui', express.static(path.join(__dirname, '..', 'public')));
+  // Админ панель с авторизацией
+  app.use('/ui', createAuthMiddleware(), express.static(path.join(__dirname, '..', 'public')));
+  
+  // Публичный клиентский интерфейс
+  app.use('/client', express.static(path.join(__dirname, '..', 'public', 'client')));
+  app.get('/client', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'client', 'index.html'));
+  });
+  
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
   app.get('/docs-json', (req, res) => {
     res.json(swaggerSpec);
@@ -72,6 +83,8 @@ const bootstrap = () => {
 
   app.use('/api/robots', createRobotsRouter({ registry }));
   app.use('/api/commands', createCommandsRouter({ commandRouter }));
+  app.use('/api/client', createClientRouter({ registry, commandRouter, x402Service, config }));
+  app.use('/api/admin', createAuthMiddleware(), createAdminRouter());
 
   /**
    * @openapi
@@ -117,8 +130,9 @@ const bootstrap = () => {
     },
   );
 
+  // Редирект корня на клиентский интерфейс
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+    res.redirect('/client');
   });
 
   app.use((err, req, res, next) => {

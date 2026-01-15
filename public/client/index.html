@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>x402 Raid - Публичный интерфейс</title>
+    <link rel="stylesheet" href="/client/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>x402 Raid Control</h1>
+      <p>Публичный интерфейс для запуска действий роботов с оплатой через Solana кошельки</p>
+    </header>
+
+    <main>
+      <!-- Режим работы -->
+      <section class="panel mode-selector">
+        <h2>Режим работы</h2>
+        <div class="mode-buttons">
+          <button id="mode-direct" class="mode-btn active">Direct</button>
+          <button id="mode-raid" class="mode-btn">RAID</button>
+        </div>
+        <p class="mode-description" id="mode-description">
+          <strong>Direct:</strong> Выберите робота и действие напрямую. Полный контроль над выбором исполнителя.
+        </p>
+      </section>
+
+      <!-- Подключение кошелька -->
+      <section class="panel wallet-section">
+        <h2>Подключение кошелька</h2>
+        <div id="wallet-status" class="wallet-status">
+          <p>Кошелек не подключен</p>
+          <button id="connect-wallet" class="btn-primary">Подключить кошелек</button>
+        </div>
+        <div id="wallet-info" class="wallet-info hidden">
+          <p><strong>Адрес:</strong> <span id="wallet-address"></span></p>
+          <p><strong>Баланс:</strong> <span id="wallet-balance"></span> SOL</p>
+          <button id="disconnect-wallet" class="btn-secondary">Отключить</button>
+        </div>
+      </section>
+
+      <!-- Direct режим: Список роботов -->
+      <section id="direct-mode" class="panel">
+        <h2>Доступные роботы</h2>
+        <div id="robots-list" class="robots-list">
+          <p class="loading">Загрузка роботов...</p>
+        </div>
+      </section>
+
+      <!-- RAID режим: Выбор действия -->
+      <section id="raid-mode" class="panel hidden">
+        <h2>Доступные действия</h2>
+        <div id="commands-list" class="commands-list">
+          <p class="loading">Загрузка действий...</p>
+        </div>
+      </section>
+
+      <!-- Форма выполнения действия -->
+      <section id="action-form-section" class="panel hidden">
+        <h2 id="action-form-title">Выполнение действия</h2>
+        <div id="action-form" class="action-form">
+          <!-- Динамически заполняется -->
+        </div>
+        <div id="action-preview" class="action-preview hidden">
+          <h3>Предварительная стоимость</h3>
+          <div class="price-info">
+            <p><strong>Стоимость:</strong> <span id="preview-price">-</span> SOL</p>
+            <p><strong>Робот:</strong> <span id="preview-robot">-</span></p>
+            <p><strong>Действие:</strong> <span id="preview-action">-</span></p>
+          </div>
+          <button id="execute-action" class="btn-primary" disabled>Выполнить действие</button>
+        </div>
+      </section>
+
+      <!-- Статус выполнения -->
+      <section id="execution-status" class="panel hidden">
+        <h2>Статус выполнения</h2>
+        <div id="status-content" class="status-content">
+          <!-- Динамически заполняется -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Модальное окно для оплаты -->
+    <div id="payment-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Оплата</h2>
+        <div id="payment-details" class="payment-details">
+          <!-- Динамически заполняется -->
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-payment" class="btn-primary">Подтвердить оплату</button>
+          <button id="cancel-payment" class="btn-secondary">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div id="notifications" class="notifications"></div>
+
+    <script>
+      // Загружаем Solana Web3.js и делаем доступным глобально
+      (async function() {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.js';
+        script.onload = function() {
+          // Solana Web3.js экспортирует в window.solanaWeb3
+          if (window.solanaWeb3) {
+            console.log('Solana Web3.js loaded');
+          }
+        };
+        document.head.appendChild(script);
+      })();
+    </script>
+    <script type="module" src="/client/app.js"></script>
+  </body>
+</html>

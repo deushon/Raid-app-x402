@@ -1,11 +1,12 @@
 const robotsList = document.getElementById('robots-list');
 const robotForm = document.getElementById('robot-form');
 const robotFormMessage = document.getElementById('robot-form-message');
-const danceForm = document.getElementById('dance-form');
-const danceMessage = document.getElementById('dance-message');
-const colaForm = document.getElementById('cola-form');
-const colaMessage = document.getElementById('cola-message');
 const refreshAllButton = document.getElementById('refresh-all');
+const availableActionsEl = document.getElementById('available-actions');
+const aiAgentForm = document.getElementById('ai-agent-form');
+const aiAgentMessage = document.getElementById('ai-agent-message');
+const llmProviderSelect = document.getElementById('llm-provider');
+const llmConfigDiv = document.getElementById('llm-config');
 
 let map = null;
 let markersLayer = null;
@@ -51,17 +52,14 @@ const api = {
     });
   },
 
-  dance(quantity) {
-    return this.request('/api/commands/dance', {
-      method: 'POST',
-      body: { quantity },
-    });
+  getAiAgentConfig() {
+    return this.request('/api/admin/ai-agent');
   },
 
-  buyCola({ location, quantity }) {
-    return this.request('/api/commands/buy-cola', {
+  saveAiAgentConfig(data) {
+    return this.request('/api/admin/ai-agent', {
       method: 'POST',
-      body: { location, quantity },
+      body: data,
     });
   },
 };
@@ -300,70 +298,117 @@ robotForm.addEventListener('submit', async (event) => {
   }
 });
 
-danceForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const formData = new FormData(danceForm);
-  const quantity = formData.get('quantity');
-
+// Load and render available actions
+const renderAvailableActions = async () => {
   try {
-    const result = await api.dance(quantity);
-    const responses = Array.isArray(result.results) ? result.results : [];
-    const successCount = responses.filter((entry) => entry.status === 'success').length;
-    const failures = responses.filter((entry) => entry.status !== 'success');
-    const suggestedPrice = formatAmount(result.summary?.suggestedPrice);
-    const priceMessage = suggestedPrice ? ` Suggested price: ${suggestedPrice} SOL.` : '';
-    const strategyMessage = result.summary?.selectionStrategy
-      ? ` Strategy: ${result.summary.selectionStrategy}.`
-      : '';
-    if (failures.length > 0) {
-      const firstFailure = failures[0];
-      setMessage(
-        danceMessage,
-        `Command dispatched. ${successCount}/${responses.length} completed. `
-          + `First failure: ${firstFailure.error || 'unknown error'}.${priceMessage}${strategyMessage}`,
-        'error',
-      );
-    } else {
-      setMessage(
-        danceMessage,
-        `Command dispatched. ${successCount}/${responses.length} robots completed move demo.${priceMessage}${strategyMessage}`,
-        'success',
-      );
+    const { robots } = await api.listRobots();
+    const actionsMap = new Map();
+
+    robots.forEach((robot) => {
+      const methods = robot.status?.availableMethods || [];
+      methods.forEach((method) => {
+        const methodKey = typeof method === 'string' ? method : (method.path || method.description || 'unknown');
+        if (!actionsMap.has(methodKey)) {
+          actionsMap.set(methodKey, {
+            name: methodKey,
+            description: typeof method === 'object' ? (method.description || '') : '',
+            httpMethod: typeof method === 'object' ? (method.httpMethod || 'POST') : 'POST',
+            pricing: typeof method === 'object' ? (method.pricing || null) : null,
+            parameters: typeof method === 'object' ? (method.parameters || {}) : {},
+            availableRobots: [],
+          });
+        }
+        actionsMap.get(methodKey).availableRobots.push({
+          id: robot.id,
+          name: robot.name,
+        });
+      });
+    });
+
+    const actions = Array.from(actionsMap.values());
+    
+    if (actions.length === 0) {
+      availableActionsEl.innerHTML = '<p class="robots-list-empty">No actions available. Register robots first.</p>';
+      return;
     }
+
+    availableActionsEl.innerHTML = actions.map(action => `
+      <div class="action-card">
+        <div class="action-header">
+          <h4>${action.name}</h4>
+          <span class="method-meta">${action.httpMethod}</span>
+        </div>
+        ${action.description ? `<p class="method-description">${action.description}</p>` : ''}
+        ${action.pricing ? `<p class="method-pricing">Price: ${action.pricing.amount} ${action.pricing.assetSymbol || 'SOL'}</p>` : '<p class="method-pricing">Free</p>'}
+        <p class="method-meta">Available on ${action.availableRobots.length} robot(s): ${action.availableRobots.map(r => r.name).join(', ')}</p>
+      </div>
+    `).join('');
   } catch (error) {
-    setMessage(danceMessage, error.message, 'error');
+    availableActionsEl.innerHTML = `<p class="message error">Error loading actions: ${error.message}</p>`;
   }
+};
+
+// AI Agent form handling
+llmProviderSelect.addEventListener('change', (e) => {
+  llmConfigDiv.classList.toggle('hidden', !e.target.value);
 });
 
-colaForm.addEventListener('submit', async (event) => {
+aiAgentForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const formData = new FormData(colaForm);
-  const payload = {
-    location: {
-      lat: Number(formData.get('lat')),
-      lng: Number(formData.get('lng')),
+  const formData = new FormData(aiAgentForm);
+  
+  const config = {
+    strategy: formData.get('strategy'),
+    n8nWebhookUrl: formData.get('n8nWebhookUrl') || null,
+    llm: {
+      provider: formData.get('llmProvider') || null,
+      apiKey: formData.get('llmApiKey') || null,
+      endpoint: formData.get('llmEndpoint') || null,
+      model: formData.get('llmModel') || null,
     },
-    quantity: Number(formData.get('quantity')),
   };
 
   try {
-    const result = await api.buyCola(payload);
-    const commandResult = result.result || {};
-    const summary = result.summary || {};
-    const suggestedPrice = formatAmount(summary?.suggestedPrice);
-    const priceMessage = suggestedPrice ? ` Suggested price: ${suggestedPrice} SOL.` : '';
-    const status = commandResult.status || 'unknown';
-    const robotId = commandResult.robotId || 'unknown';
-    const strategy = summary.selectionStrategy || commandResult.selection?.strategy;
-    const strategyMessage = strategy ? ` Strategy: ${strategy}.` : '';
-    const message = `Command dispatched to robot ${robotId} with status ${status}.${priceMessage}${strategyMessage}`;
-    setMessage(colaMessage, message, status === 'success' ? 'success' : 'error');
+    await api.saveAiAgentConfig(config);
+    setMessage(aiAgentMessage, 'AI Agent configuration saved successfully', 'success');
   } catch (error) {
-    setMessage(colaMessage, error.message, 'error');
+    setMessage(aiAgentMessage, `Error saving configuration: ${error.message}`, 'error');
   }
 });
+
+// Load AI Agent config on page load
+const loadAiAgentConfig = async () => {
+  try {
+    const config = await api.getAiAgentConfig();
+    if (config) {
+      document.getElementById('ai-strategy').value = config.strategy || 'smart';
+      if (config.n8nWebhookUrl) {
+        document.querySelector('[name="n8nWebhookUrl"]').value = config.n8nWebhookUrl;
+      }
+      if (config.llm) {
+        llmProviderSelect.value = config.llm.provider || '';
+        if (config.llm.provider) {
+          llmConfigDiv.classList.remove('hidden');
+          if (config.llm.apiKey) {
+            document.querySelector('[name="llmApiKey"]').value = config.llm.apiKey;
+          }
+          if (config.llm.endpoint) {
+            document.querySelector('[name="llmEndpoint"]').value = config.llm.endpoint;
+          }
+          if (config.llm.model) {
+            document.querySelector('[name="llmModel"]').value = config.llm.model;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load AI Agent config:', error);
+  }
+};
 
 setInterval(renderRobots, 15000);
 initMap();
 renderRobots();
+renderAvailableActions();
+loadAiAgentConfig();
 
