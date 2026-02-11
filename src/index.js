@@ -32,10 +32,10 @@ const bootstrap = () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Админ панель с авторизацией
+  // Admin panel (auth required)
   app.use('/ui', createAuthMiddleware(), express.static(path.join(__dirname, '..', 'public')));
   
-  // Публичный клиентский интерфейс
+  // Public client UI
   app.use('/client', express.static(path.join(__dirname, '..', 'public', 'client')));
   app.get('/client', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'client', 'index.html'));
@@ -141,7 +141,7 @@ const bootstrap = () => {
     },
   );
 
-  // Редирект корня на клиентский интерфейс
+  // Redirect root to client UI
   app.get('/', (req, res) => {
     res.redirect('/client');
   });

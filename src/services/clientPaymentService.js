@@ -17,8 +17,8 @@ class ClientPaymentService {
   }
 
   /**
-   * Проверяет транзакцию на блокчейне.
-   * При "Transaction not found" делает несколько попыток с задержкой (RPC может отставать).
+   * Verify transaction on-chain.
+   * Retries with delay when "Transaction not found" (RPC may lag).
    */
   async verifyTransaction(signature, expectedReceiver, expectedAmount) {
     if (!this.connection) {
@@ -48,7 +48,7 @@ class ClientPaymentService {
         return { valid: false, error: 'Transaction failed' };
       }
 
-      // Проверяем получателя и сумму
+      // Check receiver and amount
       const postBalances = transaction.meta.postBalances;
       const preBalances = transaction.meta.preBalances;
       const accountKeys = transaction.transaction.message.accountKeys;
@@ -75,7 +75,7 @@ class ClientPaymentService {
       }
 
       const expectedLamports = Math.round(Number(expectedAmount) * 1_000_000_000);
-      const tolerance = 1000; // Допуск в lamports для комиссий
+      const tolerance = 1000; // Lamports tolerance for fees
 
       if (Math.abs(amountTransferred - expectedLamports) > tolerance) {
         return {
@@ -104,12 +104,10 @@ class ClientPaymentService {
   }
 
   /**
-   * Инициирует возврат средств (refund)
-   * Требует настройки серверного кошелька
+   * Initiate refund. Requires server wallet configuration.
    */
   async initiateRefund(receiver, amount, reason) {
-    // Это должно быть реализовано через серверный кошелек
-    // Пока возвращаем заглушку
+    // To be implemented via server wallet
     logger.info('Refund initiated', { receiver, amount, reason });
     return {
       status: 'pending',

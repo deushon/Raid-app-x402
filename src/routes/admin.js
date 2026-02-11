@@ -9,7 +9,7 @@ const createAdminRouter = () => {
   const router = express.Router();
 
   /**
-   * Получить конфигурацию AI агента
+   * Get AI agent configuration.
    */
   router.get('/ai-agent', async (req, res) => {
     try {
@@ -23,22 +23,22 @@ const createAdminRouter = () => {
   });
 
   /**
-   * Сохранить конфигурацию AI агента
+   * Save AI agent configuration.
    */
   router.post('/ai-agent', async (req, res) => {
     try {
       const config = req.body;
       
-      // Валидация
+      // Validate
       if (config.strategy && !['smart', 'lowest_price', 'closest', 'fastest'].includes(config.strategy)) {
         return res.status(400).json({ error: 'Invalid strategy' });
       }
 
-      // Сохраняем в файл
+      // Write to file
       await fs.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
       await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
 
-      // Обновляем переменные окружения (для текущей сессии)
+      // Update env for current session
       if (config.strategy) {
         process.env.AI_AGENT_STRATEGY = config.strategy;
       }

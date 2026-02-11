@@ -1,19 +1,19 @@
-// Wallet integration - используем глобальный объект window.solana
+// Wallet integration uses global window.solana
 const API_BASE = '/api/client';
 let currentRpcUrl = 'https://api.mainnet-beta.solana.com';
 
-// Solana Web3.js загружается через script tag в HTML
+// Solana Web3.js is loaded via script tag in HTML
 let SolanaWeb3 = null;
 const loadSolanaWeb3 = () => {
   return new Promise((resolve) => {
-    // Проверяем, загружена ли библиотека
+    // Check if library is loaded
     if (window.solanaWeb3Ready && window.solanaWeb3) {
       SolanaWeb3 = window.solanaWeb3;
       resolve();
       return;
     }
     
-    // Устанавливаем обработчик готовности
+    // Set ready handler
     window.onSolanaWeb3Ready = () => {
       if (window.solanaWeb3) {
         SolanaWeb3 = window.solanaWeb3;
@@ -21,7 +21,7 @@ const loadSolanaWeb3 = () => {
       resolve();
     };
     
-    // Если уже загружено
+    // Already loaded
     if (window.solanaWeb3Ready) {
       if (window.solanaWeb3) {
         SolanaWeb3 = window.solanaWeb3;
@@ -30,7 +30,7 @@ const loadSolanaWeb3 = () => {
       return;
     }
     
-    // Таймаут на случай, если библиотека не загрузится
+    // Timeout if library never loads
     setTimeout(() => {
       if (!SolanaWeb3) {
         console.warn('Solana Web3.js not loaded, wallet features may not work');
@@ -40,7 +40,7 @@ const loadSolanaWeb3 = () => {
   });
 };
 
-// Альтернатива: используем fetch для работы с Solana RPC напрямую
+// LAMPORTS_PER_SOL for amount conversion
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
 // State
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadMode();
   } catch (error) {
     console.error('Failed to load Solana Web3.js:', error);
-    showNotification('Ошибка загрузки Solana библиотеки', 'error');
+    showNotification('Failed to load Solana library', 'error');
   }
 });
 
@@ -107,17 +107,17 @@ async function loadSettings() {
     const customUrlEl = document.getElementById('rpc-custom-url');
     const currentDisplay = document.getElementById('rpc-current-display');
     if (providerEl) providerEl.value = data.rpcProvider || 'helius';
-    if (heliusKeyEl && data.hasHeliusKey) heliusKeyEl.placeholder = '•••••••• (уже задан)';
+    if (heliusKeyEl && data.hasHeliusKey) heliusKeyEl.placeholder = '•••••••• (already set)';
     if (customUrlEl && data.customRpcUrl) customUrlEl.value = data.customRpcUrl;
     if (currentDisplay) {
       const short = data.solanaRpcUrl ? data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***') : currentRpcUrl;
-      currentDisplay.textContent = `Текущий RPC: ${short}`;
+      currentDisplay.textContent = `Current RPC: ${short}`;
     }
     updateRpcOptionVisibility();
   } catch (e) {
     console.warn('Could not load RPC settings', e);
     const currentDisplay = document.getElementById('rpc-current-display');
-    if (currentDisplay) currentDisplay.textContent = `Текущий RPC: ${currentRpcUrl}`;
+    if (currentDisplay) currentDisplay.textContent = `Current RPC: ${currentRpcUrl}`;
   }
 }
 
@@ -136,7 +136,7 @@ async function saveSettingsFromUI() {
   const btn = document.getElementById('settings-save');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Сохранение...';
+    btn.textContent = 'Saving...';
   }
   try {
     const res = await fetch(`${API_BASE}/settings`, {
@@ -149,7 +149,7 @@ async function saveSettingsFromUI() {
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Ошибка сохранения');
+    if (!res.ok) throw new Error(data.error || 'Failed to save');
     if (data.solanaRpcUrl) {
       currentRpcUrl = data.solanaRpcUrl;
       initConnection();
@@ -158,15 +158,15 @@ async function saveSettingsFromUI() {
     const currentDisplay = document.getElementById('rpc-current-display');
     if (currentDisplay) {
       const short = data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***');
-      currentDisplay.textContent = `Текущий RPC: ${short}`;
+      currentDisplay.textContent = `Current RPC: ${short}`;
     }
-    showNotification('Настройки RPC сохранены', 'success');
+    showNotification('RPC settings saved', 'success');
   } catch (e) {
-    showNotification('Ошибка: ' + (e.message || 'не удалось сохранить'), 'error');
+    showNotification('Error: ' + (e.message || 'Failed to save'), 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Сохранить настройки';
+      btn.textContent = 'Save settings';
     }
   }
 }
@@ -183,8 +183,8 @@ function setMode(mode) {
   document.getElementById('execution-status').classList.add('hidden');
 
   const descriptions = {
-    direct: '<strong>Direct:</strong> Выберите робота и действие напрямую. Полный контроль над выбором исполнителя.',
-    raid: '<strong>RAID:</strong> Система автоматически выберет оптимального исполнителя. Индивидуальные роботы скрыты.',
+    direct: '<strong>Direct:</strong> Choose robot and action. Full control over executor.',
+    raid: '<strong>RAID:</strong> System selects the best executor. Individual robots are hidden.',
   };
   document.getElementById('mode-description').innerHTML = descriptions[mode];
 
@@ -201,14 +201,14 @@ function loadMode() {
 
 async function loadRobots() {
   const listEl = document.getElementById('robots-list');
-  listEl.innerHTML = '<p class="loading">Загрузка роботов...</p>';
+  listEl.innerHTML = '<p class="loading">Loading robots...</p>';
 
   try {
     const response = await fetch(`${API_BASE}/robots`);
     const data = await response.json();
 
     if (!data.robots || data.robots.length === 0) {
-      listEl.innerHTML = '<p class="loading">Нет доступных роботов</p>';
+      listEl.innerHTML = '<p class="loading">No robots available</p>';
       return;
     }
 
@@ -225,21 +225,21 @@ async function loadRobots() {
       });
     });
   } catch (error) {
-    showNotification('Ошибка загрузки роботов: ' + error.message, 'error');
-    listEl.innerHTML = '<p class="loading">Ошибка загрузки</p>';
+    showNotification('Failed to load robots: ' + error.message, 'error');
+    listEl.innerHTML = '<p class="loading">Load failed</p>';
   }
 }
 
 async function loadCommands() {
   const listEl = document.getElementById('commands-list');
-  listEl.innerHTML = '<p class="loading">Загрузка действий...</p>';
+  listEl.innerHTML = '<p class="loading">Loading actions...</p>';
 
   try {
     const response = await fetch(`${API_BASE}/commands`);
     const data = await response.json();
 
     if (!data.commands || data.commands.length === 0) {
-      listEl.innerHTML = '<p class="loading">Нет доступных действий</p>';
+      listEl.innerHTML = '<p class="loading">No actions available</p>';
       return;
     }
 
@@ -253,8 +253,8 @@ async function loadCommands() {
       }
     });
   } catch (error) {
-    showNotification('Ошибка загрузки действий: ' + error.message, 'error');
-    listEl.innerHTML = '<p class="loading">Ошибка загрузки</p>';
+    showNotification('Failed to load actions: ' + error.message, 'error');
+    listEl.innerHTML = '<p class="loading">Load failed</p>';
   }
 }
 
@@ -265,7 +265,7 @@ function renderRobot(robot) {
     const methodName = typeof method === 'string' ? method : (method.path || method.description || 'unknown');
     const methodPrice = typeof method === 'object' && method.pricing 
       ? `${method.pricing.amount} ${method.pricing.assetSymbol || 'SOL'}` 
-      : 'Бесплатно';
+      : 'Free';
     const methodDesc = typeof method === 'object' ? (method.description || '') : '';
 
     return `
@@ -285,19 +285,19 @@ function renderRobot(robot) {
         <span class="robot-name">${robot.name}</span>
         <span class="robot-status ${robot.status}">${robot.status.toUpperCase()}</span>
       </div>
-      <div class="robot-methods">${methodsHtml || '<p>Нет доступных методов</p>'}</div>
+      <div class="robot-methods">${methodsHtml || '<p>No methods available</p>'}</div>
     </div>
   `;
 }
 
 function renderCommand(cmd) {
-  const price = cmd.pricing ? `${cmd.pricing.amount} ${cmd.pricing.assetSymbol || 'SOL'}` : 'Цена уточняется';
+  const price = cmd.pricing ? `${cmd.pricing.amount} ${cmd.pricing.assetSymbol || 'SOL'}` : 'Price TBD';
   
   return `
     <div class="command-card" data-command="${cmd.name}">
       <div class="command-name">${cmd.name}</div>
       <p class="command-description">${cmd.description || ''}</p>
-      <p class="command-description"><strong>Цена:</strong> ${price}</p>
+      <p class="command-description"><strong>Price:</strong> ${price}</p>
     </div>
   `;
 }
@@ -333,10 +333,10 @@ function showActionForm() {
   preview.classList.add('hidden');
   
   if (currentAction.mode === 'direct') {
-    document.getElementById('action-form-title').textContent = `Выполнение: ${getMethodKey(currentAction.method)}`;
+    document.getElementById('action-form-title').textContent = `Execute: ${getMethodKey(currentAction.method)}`;
     form.innerHTML = buildActionForm(currentAction.method);
   } else {
-    document.getElementById('action-form-title').textContent = `Выполнение: ${currentAction.command.name}`;
+    document.getElementById('action-form-title').textContent = `Execute: ${currentAction.command.name}`;
     form.innerHTML = buildActionForm(currentAction.command);
   }
 
@@ -346,12 +346,12 @@ function showActionForm() {
 
 function buildActionForm(method) {
   if (typeof method === 'string') {
-    return '<p>Параметры не требуются</p>';
+    return '<p>No parameters required</p>';
   }
 
   const params = method.parameters || {};
   if (Object.keys(params).length === 0) {
-    return '<p>Параметры не требуются</p>';
+    return '<p>No parameters required</p>';
   }
 
   let html = '';
@@ -398,18 +398,18 @@ async function estimatePrice() {
       document.getElementById('action-preview').classList.remove('hidden');
       document.getElementById('execute-action').disabled = !walletPublicKey;
     } else {
-      showNotification('Не удалось определить стоимость', 'error');
+      showNotification('Could not determine cost', 'error');
     }
   } catch (error) {
-    showNotification('Ошибка расчета стоимости: ' + error.message, 'error');
+    showNotification('Cost estimate error: ' + error.message, 'error');
   }
 }
 
 async function connectWallet() {
-  // Поддержка различных Solana кошельков
+  // Support multiple Solana wallets
   let provider = null;
 
-  // Проверяем различные варианты
+  // Check wallet providers
   if (typeof window.solana !== 'undefined') {
     provider = window.solana;
   } else if (typeof window.solflare !== 'undefined') {
@@ -421,23 +421,23 @@ async function connectWallet() {
   }
 
   if (!provider) {
-    showNotification('Solana кошелек не найден. Установите Phantom, Backpack, Solflare или другой Solana кошелек.', 'error');
+    showNotification('Solana wallet not found. Install Phantom, Backpack, Solflare or another Solana wallet.', 'error');
     return;
   }
 
   try {
-    // Повторно проверяем загрузку Solana Web3 (скрипт мог загрузиться после DOMContentLoaded)
+    // Re-check Solana Web3 load (script may load after DOMContentLoaded)
     await loadSolanaWeb3();
     initConnection();
 
-    // Подключаемся к кошельку
+    // Connect wallet
     if (provider.connect) {
       await provider.connect();
     } else if (provider.isConnected && !provider.isConnected()) {
       await provider.connect();
     }
 
-    // Получаем публичный ключ
+    // Get public key
     let publicKey;
     if (provider.publicKey) {
       publicKey = provider.publicKey;
@@ -453,16 +453,16 @@ async function connectWallet() {
         ? new SolanaWeb3.PublicKey(publicKey)
         : publicKey;
     } else {
-      // Fallback: сохраняем как строку, если библиотека не загружена
+      // Fallback: store as string if library not loaded
       walletPublicKey = typeof publicKey === 'string' ? publicKey : publicKey.toString();
     }
 
     updateWalletUI();
     await updateWalletBalance();
 
-    showNotification('Кошелек подключен', 'success');
+    showNotification('Wallet connected', 'success');
   } catch (error) {
-    showNotification('Ошибка подключения кошелька: ' + error.message, 'error');
+    showNotification('Wallet connection error: ' + error.message, 'error');
   }
 }
 
@@ -473,7 +473,7 @@ function disconnectWallet() {
   wallet = null;
   walletPublicKey = null;
   updateWalletUI();
-  showNotification('Кошелек отключен', 'info');
+  showNotification('Wallet disconnected', 'info');
 }
 
 function updateWalletUI() {
@@ -508,28 +508,28 @@ async function updateWalletBalance() {
 
 async function executeAction() {
   if (!walletPublicKey) {
-    showNotification('Подключите кошелек для выполнения действия', 'error');
+    showNotification('Connect wallet to execute action', 'error');
     return;
   }
 
   try {
-    // Получаем invoice от робота
+    // Get invoice from robot
     const invoice = await initiateCommand();
     
     if (!invoice) {
-      showNotification('Не удалось получить счет на оплату', 'error');
+      showNotification('Could not get payment invoice', 'error');
       return;
     }
 
-    // Показываем модальное окно оплаты
+    // Show payment modal
     showPaymentModal(invoice);
   } catch (error) {
-    showNotification('Ошибка инициации команды: ' + error.message, 'error');
+    showNotification('Command initiation error: ' + error.message, 'error');
   }
 }
 
 /**
- * Парсит тело ответа 402 в единый формат invoice (x402 V2: accepts[0] или legacy).
+ * Parse 402 response body into invoice (x402 V2 accepts[0] or legacy).
  */
 function parse402Invoice(data) {
   if (!data || typeof data !== 'object') return null;
@@ -550,8 +550,7 @@ function parse402Invoice(data) {
 }
 
 /**
- * Собирает параметры из контейнера #action-form (это div с input/select, не HTML form).
- * FormData принимает только HTMLFormElement, поэтому собираем значения вручную.
+ * Collect parameters from #action-form container (div with inputs, not a form element).
  */
 function getActionFormParameters() {
   const container = document.getElementById('action-form');
@@ -578,7 +577,7 @@ async function initiateCommand() {
   try {
     const parameters = getActionFormParameters();
 
-    // Получаем invoice от робота
+    // Get invoice from robot
     let robot;
     let endpoint;
     let commandName;
@@ -587,14 +586,14 @@ async function initiateCommand() {
       robot = currentAction.robot;
       commandName = getMethodKey(currentAction.method);
       
-      // Определяем endpoint из метода
+      // Resolve endpoint from method
       if (typeof currentAction.method === 'object' && currentAction.method.path) {
         endpoint = currentAction.method.path;
       } else {
         endpoint = `/commands/${commandName}`;
       }
     } else {
-      // RAID mode - нужно получить выбранного робота от сервера
+      // RAID mode: get selected robot from server
       const estimateResponse = await fetch(`${API_BASE}/estimate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -609,7 +608,7 @@ async function initiateCommand() {
         throw new Error('No robot selected for RAID mode');
       }
 
-      // Получаем полную информацию о роботе
+      // Get full robot list
       const robotsResponse = await fetch(`${API_BASE}/robots`);
       const robotsData = await robotsResponse.json();
       robot = robotsData.robots.find(r => r.id === estimateData.robot.id);
@@ -624,7 +623,7 @@ async function initiateCommand() {
         : `/commands/${commandName}`;
     }
 
-    // Отправляем запрос роботу для получения invoice
+    // Request robot for invoice
     const baseUrl = `http://${robot.host}:${robot.port}`;
     const url = `${baseUrl}${endpoint}`;
 
@@ -635,13 +634,13 @@ async function initiateCommand() {
     });
 
     if (response.status === 402) {
-      // Получили invoice (x402 V2: accepts[0] или legacy: верхний уровень)
+      // Got invoice (x402 V2 accepts[0] or legacy top-level)
       const data = await response.json();
       const invoice = parse402Invoice(data);
       if (!invoice) throw new Error('Invalid 402 response: missing payment details');
       return invoice;
     } else if (response.status === 200) {
-      // Команда выполнена без оплаты
+      // Command executed without payment
       const result = await response.json();
       showExecutionStatus({
         status: 'success',
@@ -653,7 +652,7 @@ async function initiateCommand() {
       throw new Error(`Robot returned status ${response.status}`);
     }
   } catch (error) {
-    showNotification('Ошибка инициации команды: ' + error.message, 'error');
+    showNotification('Command initiation error: ' + error.message, 'error');
     throw error;
   }
 }
@@ -663,9 +662,9 @@ function showPaymentModal(invoice) {
   const details = document.getElementById('payment-details');
   
   details.innerHTML = `
-    <p><strong>Получатель:</strong> ${invoice.receiver}</p>
-    <p><strong>Сумма:</strong> ${invoice.amount} ${invoice.asset}</p>
-    <p><strong>Ссылка:</strong> ${invoice.reference}</p>
+    <p><strong>Receiver:</strong> ${invoice.receiver}</p>
+    <p><strong>Amount:</strong> ${invoice.amount} ${invoice.asset}</p>
+    <p><strong>Reference:</strong> ${invoice.reference}</p>
   `;
   
   modal.classList.remove('hidden');
@@ -679,21 +678,21 @@ function cancelPayment() {
 
 async function confirmPayment() {
   if (!currentAction.invoice || !walletPublicKey) {
-    showNotification('Ошибка: нет данных для оплаты', 'error');
+    showNotification('Error: no payment data', 'error');
     return;
   }
 
   const invoice = currentAction.invoice;
   const button = document.getElementById('confirm-payment');
   button.disabled = true;
-  button.textContent = 'Обработка...';
+  button.textContent = 'Processing...';
 
   try {
     if (!SolanaWeb3 || !SolanaWeb3.Transaction || !SolanaWeb3.SystemProgram) {
       throw new Error('Solana Web3.js library not loaded');
     }
 
-    // Создаем транзакцию
+    // Build transaction
     const transaction = new SolanaWeb3.Transaction().add(
       SolanaWeb3.SystemProgram.transfer({
         fromPubkey: typeof walletPublicKey === 'string' 
@@ -704,35 +703,35 @@ async function confirmPayment() {
       })
     );
 
-    // Получаем последний blockhash
+    // Get latest blockhash
     const { blockhash } = await connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = typeof walletPublicKey === 'string' 
       ? new SolanaWeb3.PublicKey(walletPublicKey) 
       : walletPublicKey;
 
-    // Подписываем транзакцию
+    // Sign transaction
     const signed = await wallet.signTransaction(transaction);
     
-    // Отправляем транзакцию
+    // Send transaction
     const signature = await connection.sendRawTransaction(signed.serialize());
     
-    // Ждем подтверждения
+    // Wait for confirmation
     await connection.confirmTransaction(signature, 'confirmed');
 
-    // Закрываем модальное окно
+    // Close modal
     document.getElementById('payment-modal').classList.add('hidden');
 
-    // Отправляем подтверждение на сервер
+    // Send confirmation to server
     await submitPaymentConfirmation(signature, invoice);
 
-    showNotification('Оплата успешно выполнена', 'success');
+    showNotification('Payment completed', 'success');
     button.disabled = false;
-    button.textContent = 'Подтвердить оплату';
+    button.textContent = 'Confirm payment';
   } catch (error) {
-    showNotification('Ошибка оплаты: ' + error.message, 'error');
+    showNotification('Payment error: ' + error.message, 'error');
     button.disabled = false;
-    button.textContent = 'Подтвердить оплату';
+    button.textContent = 'Confirm payment';
   }
 }
 
@@ -764,19 +763,19 @@ async function submitPaymentConfirmation(signature, invoice) {
     const result = await response.json();
 
     if (!response.ok) {
-      const msg = result.details ? `${result.error}: ${result.details}` : (result.error || 'Ошибка сервера');
+      const msg = result.details ? `${result.error}: ${result.details}` : (result.error || 'Server error');
       showNotification(msg, 'error');
       showExecutionStatus({ status: 'failed', error: msg });
       return;
     }
 
     if (result.refundRequired) {
-      showNotification('Команда не выполнена. Возврат средств будет обработан.', 'info');
+      showNotification('Command failed. Refund will be processed.', 'info');
     }
 
     showExecutionStatus(result);
   } catch (error) {
-    showNotification('Ошибка подтверждения оплаты: ' + error.message, 'error');
+    showNotification('Payment confirmation error: ' + error.message, 'error');
   }
 }
 
@@ -788,9 +787,9 @@ function showExecutionStatus(result) {
   
   content.innerHTML = `
     <div class="status-item ${result.status}">
-      <p><strong>Статус:</strong> ${result.status}</p>
-      <p><strong>Сообщение:</strong> ${result.message || 'Нет сообщения'}</p>
-      ${result.error ? `<p><strong>Ошибка:</strong> ${result.error}</p>` : ''}
+      <p><strong>Status:</strong> ${result.status}</p>
+      <p><strong>Message:</strong> ${result.message || 'No message'}</p>
+      ${result.error ? `<p><strong>Error:</strong> ${result.error}</p>` : ''}
     </div>
   `;
 }

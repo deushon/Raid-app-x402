@@ -1,8 +1,8 @@
 const logger = require('../utils/logger');
 
 /**
- * AI Agent Service для выбора оптимальных исполнителей
- * Поддерживает интеграцию с N8N или использование встроенных стратегий
+ * AI Agent Service for selecting optimal executors.
+ * Supports N8N integration or built-in strategies.
  */
 class AIAgentService {
   constructor({ config = {} }) {
@@ -12,19 +12,19 @@ class AIAgentService {
   }
 
   /**
-   * Выбирает оптимального робота для выполнения команды
+   * Select best robot for the command.
    * @param {Object} options
-   * @param {Array} options.robots - Доступные роботы
-   * @param {String} options.command - Команда для выполнения
-   * @param {Object} options.parameters - Параметры команды
-   * @param {Object} options.context - Дополнительный контекст (location, priority, etc.)
+   * @param {Array} options.robots - Available robots
+   * @param {String} options.command - Command to run
+   * @param {Object} options.parameters - Command parameters
+   * @param {Object} options.context - Context (location, priority, etc.)
    */
   async selectExecutor({ robots, command, parameters = {}, context = {} }) {
     if (!robots || robots.length === 0) {
       throw new Error('No robots available for selection');
     }
 
-    // Если настроен N8N, используем его
+    // Use N8N when configured
     if (this.n8nWebhookUrl) {
       try {
         return await this.selectViaN8N({ robots, command, parameters, context });
@@ -33,12 +33,12 @@ class AIAgentService {
       }
     }
 
-    // Используем встроенную стратегию
+    // Use built-in strategy
     return this.selectViaStrategy({ robots, command, parameters, context });
   }
 
   /**
-   * Выбор через N8N webhook
+   * Selection via N8N webhook.
    */
   async selectViaN8N({ robots, command, parameters, context }) {
     const axios = require('axios');
@@ -76,7 +76,7 @@ class AIAgentService {
   }
 
   /**
-   * Встроенная стратегия выбора
+   * Built-in selection strategy.
    */
   selectViaStrategy({ robots, command, parameters, context }) {
     switch (this.strategy) {
@@ -94,31 +94,31 @@ class AIAgentService {
   }
 
   /**
-   * Умный выбор на основе множества факторов
+   * Smart selection using multiple factors.
    */
   smartSelection({ robots, command, parameters, context }) {
     const scored = robots.map(robot => {
       let score = 0;
 
-      // Фактор 1: Цена (чем дешевле, тем лучше, но не критично)
+      // Factor 1: Price (lower is better, not critical)
       const pricing = this.extractPricing(robot, command);
       if (pricing) {
-        score += (1 / (pricing.amount + 0.001)) * 0.3; // Нормализация
+        score += (1 / (pricing.amount + 0.001)) * 0.3; // Normalize
       }
 
-      // Фактор 2: Близость (если указана локация)
+      // Factor 2: Proximity (when location given)
       if (context.location && robot.location) {
         const distance = this.calculateDistance(context.location, robot.location);
         score += (1 / (distance + 1)) * 0.3;
       }
 
-      // Фактор 3: Доступность методов
+      // Factor 3: Method availability
       const hasMethod = this.robotHasMethod(robot, command);
       if (hasMethod) {
         score += 0.2;
       }
 
-      // Фактор 4: Статус (ready лучше чем busy)
+      // Factor 4: Status (ready better than busy)
       if (robot.status?.state === 'ready') {
         score += 0.2;
       }
@@ -137,7 +137,7 @@ class AIAgentService {
   }
 
   /**
-   * Выбор самого дешевого робота
+   * Select cheapest robot.
    */
   lowestPriceSelection({ robots, command }) {
     const withPricing = robots
@@ -149,7 +149,7 @@ class AIAgentService {
       .sort((a, b) => a.price - b.price);
 
     if (withPricing.length === 0) {
-      // Fallback на первый доступный
+      // Fallback to first available
       return {
         robot: robots[0],
         reason: 'No pricing available, selected first available robot',
@@ -165,7 +165,7 @@ class AIAgentService {
   }
 
   /**
-   * Выбор ближайшего робота
+   * Select closest robot.
    */
   closestSelection({ robots, context }) {
     if (!context.location) {
@@ -200,10 +200,10 @@ class AIAgentService {
   }
 
   /**
-   * Выбор самого быстрого робота (по последнему времени ответа)
+   * Select fastest robot (by last response time)
    */
   fastestSelection({ robots }) {
-    // Простая эвристика: выбираем робота с самым свежим health check
+    // Simple heuristic: robot with freshest health check
     const sorted = robots
       .map(robot => ({
         robot,
@@ -219,7 +219,7 @@ class AIAgentService {
   }
 
   /**
-   * Извлекает цену для команды из робота
+   * Extract command price from robot
    */
   extractPricing(robot, command) {
     const methods = robot.status?.availableMethods || [];
@@ -239,7 +239,7 @@ class AIAgentService {
   }
 
   /**
-   * Проверяет, есть ли у робота нужный метод
+   * Check if robot has the required method
    */
   robotHasMethod(robot, command) {
     const methods = robot.status?.availableMethods || [];
@@ -255,7 +255,7 @@ class AIAgentService {
   }
 
   /**
-   * Вычисляет расстояние между двумя точками
+   * Compute distance between two points
    */
   calculateDistance(a, b) {
     if (!a || !b || typeof a.lat !== 'number' || typeof b.lat !== 'number') {

@@ -134,7 +134,7 @@ const HELIUS_MAINNET_URL = 'https://mainnet.helius-rpc.com/?api-key=';
 const PUBLIC_RPC_URL = 'https://api.mainnet-beta.solana.com';
 
 /**
- * Возвращает итоговый Solana RPC URL по настройкам (provider + key или custom URL).
+ * Returns resolved Solana RPC URL from settings (provider + key or custom URL).
  * @param {{ rpcProvider?: string, heliusApiKey?: string, rpcUrl?: string }} solana
  */
 const buildSolanaRpcUrl = (solana = {}) => {

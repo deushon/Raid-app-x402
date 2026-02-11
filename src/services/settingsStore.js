@@ -9,7 +9,7 @@ let runtimeOverrides = {};
 let configSnapshot = null;
 
 /**
- * Инициализация хранилища: загружаем сохранённые настройки из файла и снимок config.
+ * Initialize store: load saved settings from file and config snapshot.
  */
 function init(config) {
   configSnapshot = config;
@@ -25,7 +25,7 @@ function init(config) {
 }
 
 /**
- * Текущие настройки RPC (для отдачи клиенту; API ключ маскируем).
+ * Current RPC settings (for client; API key is not exposed).
  */
 function getSettings() {
   const solana = configSnapshot?.x402?.solana || {};
@@ -44,7 +44,7 @@ function getSettings() {
 }
 
 /**
- * Итоговый Solana RPC URL: сначала runtime (UI), потом config/env.
+ * Resolved Solana RPC URL: runtime (UI) overrides, then config/env.
  */
 function getSolanaRpcUrl() {
   const solana = configSnapshot?.x402?.solana || {};
@@ -60,7 +60,7 @@ function getSolanaRpcUrl() {
 }
 
 /**
- * Сохранить настройки из UI (rpcProvider, heliusApiKey?, customRpcUrl?).
+ * Save settings from UI (rpcProvider, heliusApiKey?, customRpcUrl?).
  */
 function saveSettings(settings) {
   if (settings.rpcProvider !== undefined) {

@@ -24,7 +24,7 @@ const createClientRouter = ({
   const router = express.Router();
 
   /**
-   * Получить настройки (RPC URL для клиента, провайдер, без сырого API ключа)
+   * Get client settings (RPC URL, provider; API key is not returned).
    */
   router.get('/settings', (req, res) => {
     try {
@@ -37,7 +37,7 @@ const createClientRouter = ({
   });
 
   /**
-   * Сохранить настройки RPC (провайдер, Helius API ключ, кастомный URL)
+   * Save RPC settings (provider, Helius API key, custom URL).
    */
   router.post('/settings', (req, res) => {
     try {
@@ -55,7 +55,7 @@ const createClientRouter = ({
   });
 
   /**
-   * Получить список доступных роботов (для Direct режима)
+   * List available robots (for Direct mode).
    */
   router.get('/robots', (req, res) => {
     try {
@@ -80,7 +80,7 @@ const createClientRouter = ({
   });
 
   /**
-   * Получить список доступных команд (для RAID режима)
+   * List available commands (for RAID mode).
    */
   router.get('/commands', (req, res) => {
     try {
@@ -125,7 +125,7 @@ const createClientRouter = ({
   });
 
   /**
-   * Получить предварительную стоимость действия
+   * Get estimated price for an action.
    */
   router.post('/estimate', async (req, res) => {
     try {
@@ -157,7 +157,7 @@ const createClientRouter = ({
           name: robot.name || `Robot ${robot.id}`,
         };
 
-        // Найти метод и его цену
+        // Find method and its price
         const methods = robot.status?.availableMethods || [];
         const method = methods.find((m) => {
           if (typeof m === 'string') {
@@ -171,7 +171,7 @@ const createClientRouter = ({
           estimatedPrice = method.pricing.amount || null;
         }
       } else {
-        // RAID mode - используем AI агент для выбора
+        // RAID mode: use AI agent for selection
         if (!command) {
           return res.status(400).json({ error: 'command is required for raid mode' });
         }
@@ -192,7 +192,7 @@ const createClientRouter = ({
           return res.status(404).json({ error: 'No available robot found for this command' });
         }
 
-        // Используем AI агент для выбора
+        // Use AI agent for selection
         try {
           const selection = await aiAgentService.selectExecutor({
             robots: robotsWithCommand,
@@ -221,7 +221,7 @@ const createClientRouter = ({
           }
         } catch (error) {
           logger.warn('AI agent selection failed in estimate, using first available', { error: error.message });
-          // Fallback на первый доступный
+          // Fallback to first available
           const robot = robotsWithCommand[0];
           selectedRobot = {
             id: robot.id,
@@ -253,7 +253,7 @@ const createClientRouter = ({
   });
 
   /**
-   * Выполнить действие с клиентской оплатой
+   * Execute action with client payment (retry to robot with X-X402-Reference).
    */
   router.post('/execute', async (req, res) => {
     let executionResult = null;
@@ -277,7 +277,7 @@ const createClientRouter = ({
         return res.status(400).json({ error: 'Payment signature and transaction are required' });
       }
 
-      // Проверяем платеж
+      // Verify payment
       if (!clientPaymentService.isReady()) {
         logger.warn('Client payment service not ready, skipping verification');
       } else {
@@ -295,7 +295,7 @@ const createClientRouter = ({
         }
       }
 
-      // Выбираем робота
+      // Select robot
       let robot;
       if (mode === 'direct') {
         if (!robotId) {
@@ -306,7 +306,7 @@ const createClientRouter = ({
           return res.status(404).json({ error: 'Robot not found' });
         }
       } else {
-        // RAID mode - используем AI агент для выбора
+        // RAID mode: use AI agent for selection
         const robots = registry.list().filter(r => r.status.state === 'ready');
         const robotsWithCommand = robots.filter(r => {
           const methods = r.status?.availableMethods || [];
@@ -323,7 +323,7 @@ const createClientRouter = ({
           return res.status(404).json({ error: 'No robots available for this command' });
         }
 
-        // Используем AI агент для выбора оптимального робота
+        // Use AI agent to select best robot
         try {
           const selection = await aiAgentService.selectExecutor({
             robots: robotsWithCommand,
@@ -354,7 +354,7 @@ const createClientRouter = ({
         });
       }
 
-      // Находим метод
+      // Find method
       const methods = robot.status?.availableMethods || [];
       const method = methods.find(m => {
         if (typeof m === 'string') {
@@ -372,18 +372,18 @@ const createClientRouter = ({
         });
       }
 
-      // Определяем endpoint
+      // Resolve endpoint
       const endpoint = typeof method === 'object' && method.path
         ? method.path
         : `/commands/${command}`;
 
-      // Выполняем команду
+      // Execute command
       const baseUrl = `http://${robot.host}:${robot.port}`;
       const url = `${baseUrl}${endpoint}`;
 
       let response;
       try {
-        // Повторный POST на робота после оплаты: всегда шлём reference, если он есть (сценарий 402 → pay → retry)
+        // Retry POST to robot after payment: always send reference when present (402 → pay → retry)
         const headers = {};
         if (paymentTransaction.reference) {
           headers['X-X402-Reference'] = paymentTransaction.reference;
@@ -407,7 +407,7 @@ const createClientRouter = ({
         };
       } catch (error) {
         if (error.response) {
-          // Робот ответил, но с ошибкой
+          // Robot responded with error
           executionResult = {
             status: 'failed',
             robotId: robot.id,
@@ -422,7 +422,7 @@ const createClientRouter = ({
           };
           refundRequired = true;
         } else {
-          // Ошибка сети или таймаут
+          // Network error or timeout
           throw error;
         }
       }
@@ -438,7 +438,7 @@ const createClientRouter = ({
         refundRequired: true,
       });
     } finally {
-      // Если требуется возврат, инициируем его
+      // Initiate refund when required
       if (refundRequired && req.body.paymentTransaction) {
         try {
           await clientPaymentService.initiateRefund(

@@ -58,7 +58,7 @@ main {
   padding: 2rem;
 }
 
-/* Режимы работы */
+/* Mode selector */
 .mode-selector {
   display: grid;
   gap: 1rem;
@@ -100,7 +100,7 @@ main {
   color: #94a3b8;
 }
 
-/* Кошелек */
+/* Wallet */
 .wallet-section {
   display: grid;
   gap: 1rem;
@@ -121,7 +121,7 @@ main {
   color: #60a5fa;
 }
 
-/* Настройки RPC */
+/* RPC settings */
 .settings-section {
   display: grid;
   gap: 1rem;
@@ -165,7 +165,7 @@ main {
   word-break: break-all;
 }
 
-/* Кнопки */
+/* Buttons */
 .btn-primary, .btn-secondary {
   padding: 0.75rem 1.5rem;
   border-radius: 0.5rem;
@@ -200,7 +200,7 @@ main {
   background: #475569;
 }
 
-/* Список роботов */
+/* Robots list */
 .robots-list {
   display: grid;
   gap: 1rem;
@@ -296,7 +296,7 @@ main {
   margin: 0;
 }
 
-/* Список команд */
+/* Commands list */
 .commands-list {
   display: grid;
   gap: 1rem;
@@ -329,7 +329,7 @@ main {
   margin: 0;
 }
 
-/* Форма действия */
+/* Action form */
 .action-form {
   display: grid;
   gap: 1rem;
@@ -391,7 +391,7 @@ main {
   font-weight: 600;
 }
 
-/* Статус выполнения */
+/* Execution status */
 .status-content {
   display: grid;
   gap: 1rem;
@@ -419,7 +419,7 @@ main {
   background: rgba(250, 204, 21, 0.1);
 }
 
-/* Модальное окно */
+/* Modal */
 .modal {
   position: fixed;
   top: 0;
@@ -469,7 +469,7 @@ main {
   justify-content: flex-end;
 }
 
-/* Уведомления */
+/* Notifications */
 .notifications {
   position: fixed;
   top: 1rem;
@@ -515,7 +515,7 @@ main {
   }
 }
 
-/* Адаптивность */
+/* Responsive */
 @media (max-width: 768px) {
   main {
     padding: 1rem;

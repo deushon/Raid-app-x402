@@ -1,72 +1,78 @@
-# Клиентский UI для x402 Raid App
+# Client UI for x402 Raid App
 
-## Обзор
+## Overview
 
-Создан публичный интерфейс для внешних пользователей с поддержкой оплаты через Solana кошельки и двумя режимами работы.
+Public interface for external users with Solana wallet payments and two operation modes.
 
-## Доступ
+## Access
 
-- **Публичный интерфейс**: `http://localhost:3000/client`
-- **Админ панель** (защищена авторизацией): `http://localhost:3000/ui`
+- **Public UI**: `http://localhost:3000/client`
+- **Admin panel** (auth required): `http://localhost:3000/ui`
 
-## Режимы работы
+## Modes
 
 ### Direct Mode
-- Пользователь видит список всех доступных роботов
-- Прямой выбор робота и действия
-- Полный контроль над выбором исполнителя
+- User sees all available robots
+- Direct choice of robot and action
+- Full control over executor selection
 
 ### RAID Mode
-- Индивидуальные роботы скрыты от пользователя
-- Система автоматически выбирает оптимального исполнителя
-- Использует AI агент для интеллектуального выбора
+- Individual robots are hidden
+- System selects the best executor automatically
+- Uses AI agent for selection
 
-## Интеграция кошельков
+## Wallet integration
 
-Поддерживаются все SOL-совместимые кошельки:
+All SOL-compatible wallets are supported:
 - Phantom
 - Backpack
 - Solflare
-- Другие кошельки с поддержкой стандарта Solana Wallet Adapter
+- Other Solana Wallet Adapter–compatible wallets
 
-## Платежный flow
+## Payment flow
 
-1. Пользователь выбирает действие
-2. Система показывает предварительную стоимость
-3. Пользователь подключает кошелек
-4. При выполнении действия:
-   - Получение invoice от робота (если требуется оплата)
-   - Подписание транзакции через кошелек
-   - Отправка транзакции в блокчейн
-   - Подтверждение оплаты роботу
-   - Выполнение команды
-5. При ошибке выполнения - автоматический возврат средств
+1. User selects an action
+2. System shows estimated cost
+3. User connects wallet
+4. On execute:
+   - Get invoice from robot (if payment required)
+   - Sign transaction in wallet
+   - Send transaction to blockchain
+   - Confirm payment to robot
+   - Run command
+5. On execution error: automatic refund
 
-## API Endpoints
+## API endpoints
 
 ### GET `/api/client/robots`
-Получить список доступных роботов (для Direct режима)
+List available robots (Direct mode).
 
 ### GET `/api/client/commands`
-Получить список доступных команд (для RAID режима)
+List available commands (RAID mode).
+
+### GET `/api/client/settings`
+Get RPC and client settings (no API key).
+
+### POST `/api/client/settings`
+Save RPC settings (provider, Helius API key, custom URL).
 
 ### POST `/api/client/estimate`
-Получить предварительную стоимость действия
+Get estimated price for an action.
 ```json
 {
   "mode": "direct" | "raid",
-  "robotId": "robot-id", // для direct mode
+  "robotId": "robot-id",
   "command": "command-name",
   "parameters": {}
 }
 ```
 
 ### POST `/api/client/execute`
-Выполнить действие с клиентской оплатой
+Execute action with client payment (retry to robot with X-X402-Reference).
 ```json
 {
   "mode": "direct" | "raid",
-  "robotId": "robot-id", // для direct mode
+  "robotId": "robot-id",
   "command": "command-name",
   "parameters": {},
   "paymentSignature": "transaction-signature",
@@ -80,26 +86,26 @@
 }
 ```
 
-## AI Agent для выбора исполнителей
+## AI agent for executor selection
 
-### Встроенные стратегии
+### Built-in strategies
 
-- **smart** (по умолчанию): Умный выбор на основе цены, местоположения и доступности
-- **lowest_price**: Выбор самого дешевого робота
-- **closest**: Выбор ближайшего робота
-- **fastest**: Выбор робота с самым свежим health check
+- **smart** (default): Price, location, and availability
+- **lowest_price**: Cheapest robot
+- **closest**: Closest robot
+- **fastest**: Robot with freshest health check
 
-### Интеграция с N8N
+### N8N integration
 
-Для использования N8N для выбора исполнителей:
+To use N8N for selection:
 
-1. Создайте webhook в N8N
-2. Установите переменную окружения:
+1. Create a webhook in N8N
+2. Set:
    ```
    N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/robot-selection
    ```
 
-N8N webhook должен принимать:
+N8N webhook receives:
 ```json
 {
   "robots": [...],
@@ -109,7 +115,7 @@ N8N webhook должен принимать:
 }
 ```
 
-И возвращать:
+And returns:
 ```json
 {
   "selectedRobotId": "robot-id",
@@ -118,52 +124,52 @@ N8N webhook должен принимать:
 }
 ```
 
-## Конфигурация
+## Configuration
 
-### Переменные окружения
+### Environment variables
 
 ```bash
-# Авторизация админ панели
+# Admin panel auth
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password
 
 # AI Agent
 AI_AGENT_STRATEGY=smart
-N8N_WEBHOOK_URL=  # опционально
+N8N_WEBHOOK_URL=  # optional
 
-# Solana RPC (для проверки платежей)
-X402_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+# Solana RPC (payment verification)
+SOLANA_RPC_PROVIDER=helius
+HELIUS_API_KEY=your-key
 ```
 
-## Безопасность
+## Security
 
-- Админ панель защищена базовой HTTP авторизацией
-- Платежи проверяются на блокчейне перед выполнением команды
-- Автоматический возврат средств при ошибках выполнения
-- Все транзакции подписываются пользователем через кошелек
+- Admin panel uses basic HTTP auth
+- Payments are verified on-chain before running the command
+- Refund initiated on execution errors
+- All transactions are signed by the user in the wallet
 
-## Разработка
+## Development
 
-### Структура файлов
+### File structure
 
 ```
 public/client/
-  ├── index.html      # HTML структура
-  ├── styles.css      # Стили
-  └── app.js          # JavaScript логика
+  index.html
+  styles.css
+  app.js
 
 src/
-  ├── routes/
-  │   └── client.js   # API роуты для клиентского UI
-  ├── services/
-  │   ├── clientPaymentService.js  # Сервис проверки платежей
-  │   └── aiAgentService.js        # AI агент для выбора исполнителей
-  └── middleware/
-      └── auth.js     # Авторизация для админ панели
+  routes/client.js
+  services/
+    clientPaymentService.js
+    settingsStore.js
+    aiAgentService.js
+  middleware/auth.js
 ```
 
-## Известные ограничения
+## Known limitations
 
-1. Возврат средств требует настройки серверного кошелька (в разработке)
-2. N8N интеграция опциональна, по умолчанию используются встроенные стратегии
-3. Проверка платежей требует настройки Solana RPC URL
+1. Refund requires server wallet setup (in progress)
+2. N8N is optional; built-in strategies are used by default
+3. Payment verification requires Solana RPC URL (Helius or custom)
