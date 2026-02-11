@@ -74,8 +74,7 @@ npm run dev        # run in watch mode with nodemon
 | `POST` | `/api/commands/buy-cola` | Dispatch a logistics task `{ location, quantity }`. |
 | `POST` | `/api/payments/x402` | Example endpoint protected by x402 middleware. Post payment callbacks here. |
 
-> `POST /api/commands/dance` will automatically initiate the `/api/v1/robot/move_demo` flow on each selected robot, opening (and confirming) the x402 payment session when a reference is returned.
-> Command responses include a `summary` object describing the executor strategy, raw robot costs, and the suggested client price after applying the configured markup.
+> `POST /api/commands/dance` uses the **x402 V2** flow: request paid endpoint → receive **HTTP 402** with `x402Version: 2` and `accepts[]` (reference in `accepts[0].extra.reference`, `payTo`, `amount`, `asset`) → settle payment (gateway or direct Solana) → retry with **`X-X402-Reference`** header. Command responses include a `summary` with executor strategy, robot costs, and suggested client price (see [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
 
 ### Payment Providers
 
@@ -138,7 +137,7 @@ Robots should expose at least:
 }
 ```
 
-If a robot is configured as `requiresX402`, all outgoing requests will include `x-402-signature` (and `x-402-wallet` when provided). Customise `src/services/x402Service.js` to align with your deployment’s x402 quickstart guidelines.
+If a robot is configured as `requiresX402`, paid endpoints are called without payment first; on **402** we parse the V2 body (`accepts[0]`), settle the invoice, then retry with **`X-X402-Reference`**. For optional legacy or custom auth, `x-402-signature` / `x-402-wallet` can be added in `src/services/x402Service.js`. Protocol details: [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md) and [x402 Register Resource](https://www.x402scan.com/resources/register).
 
 ### Extending the Service
 
