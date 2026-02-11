@@ -14,10 +14,13 @@ const createAdminRouter = require('./routes/admin');
 const createX402PaymentMiddleware = require('./middleware/x402Payment');
 const createAuthMiddleware = require('./middleware/auth');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
+const settingsStore = require('./services/settingsStore');
 
 const bootstrap = () => {
   const config = loadConfig(process.argv.slice(2));
   const { server } = config;
+
+  settingsStore.init(config);
 
   const x402Service = new X402Service(config.x402);
   const healthMonitor = createHealthMonitor({ config, x402Service });
@@ -83,7 +86,15 @@ const bootstrap = () => {
 
   app.use('/api/robots', createRobotsRouter({ registry }));
   app.use('/api/commands', createCommandsRouter({ commandRouter }));
-  app.use('/api/client', createClientRouter({ registry, commandRouter, x402Service, config }));
+  app.use('/api/client', createClientRouter({
+    registry,
+    commandRouter,
+    x402Service,
+    config,
+    getSolanaRpcUrl: settingsStore.getSolanaRpcUrl,
+    getSettings: settingsStore.getSettings,
+    saveSettings: settingsStore.saveSettings,
+  }));
   app.use('/api/admin', createAuthMiddleware(), createAdminRouter());
 
   /**

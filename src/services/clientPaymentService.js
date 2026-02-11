@@ -2,34 +2,47 @@ const { Connection, PublicKey } = require('@solana/web3.js');
 const logger = require('../utils/logger');
 
 class ClientPaymentService {
-  constructor({ solanaRpcUrl, commitment = 'confirmed' }) {
-    this.connection = solanaRpcUrl 
-      ? new Connection(solanaRpcUrl, commitment)
-      : null;
+  constructor({ solanaRpcUrl, getRpcUrl, commitment = 'confirmed' }) {
     this.commitment = commitment;
+    this._getRpcUrl = getRpcUrl || (() => solanaRpcUrl);
+  }
+
+  get connection() {
+    const url = this._getRpcUrl();
+    return url ? new Connection(url, this.commitment) : null;
   }
 
   isReady() {
-    return Boolean(this.connection);
+    return Boolean(this._getRpcUrl());
   }
 
   /**
-   * Проверяет транзакцию на блокчейне
+   * Проверяет транзакцию на блокчейне.
+   * При "Transaction not found" делает несколько попыток с задержкой (RPC может отставать).
    */
   async verifyTransaction(signature, expectedReceiver, expectedAmount) {
     if (!this.connection) {
       throw new Error('Solana connection is not configured');
     }
 
-    try {
-      const transaction = await this.connection.getTransaction(signature, {
-        commitment: this.commitment,
-        maxSupportedTransactionVersion: 0,
-      });
+    const maxAttempts = 5;
+    const delayMs = 2000;
 
-      if (!transaction) {
-        return { valid: false, error: 'Transaction not found' };
-      }
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const transaction = await this.connection.getTransaction(signature, {
+          commitment: this.commitment,
+          maxSupportedTransactionVersion: 0,
+        });
+
+        if (!transaction) {
+          if (attempt < maxAttempts) {
+            logger.debug('Transaction not found yet, retrying', { signature, attempt });
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+          return { valid: false, error: 'Transaction not found (RPC may be delayed)' };
+        }
 
       if (!transaction.meta || transaction.meta.err) {
         return { valid: false, error: 'Transaction failed' };
@@ -43,9 +56,11 @@ class ClientPaymentService {
       let receiverFound = false;
       let amountTransferred = 0;
 
+      const receiverStr = String(expectedReceiver);
       for (let i = 0; i < accountKeys.length; i++) {
         const accountKey = accountKeys[i];
-        if (accountKey.toString() === expectedReceiver) {
+        const keyStr = typeof accountKey === 'string' ? accountKey : (accountKey && accountKey.toString ? accountKey.toString() : String(accountKey));
+        if (keyStr === receiverStr) {
           receiverFound = true;
           const balanceChange = postBalances[i] - preBalances[i];
           if (balanceChange > 0) {
@@ -59,7 +74,7 @@ class ClientPaymentService {
         return { valid: false, error: 'Receiver not found in transaction' };
       }
 
-      const expectedLamports = Math.round(expectedAmount * 1_000_000_000);
+      const expectedLamports = Math.round(Number(expectedAmount) * 1_000_000_000);
       const tolerance = 1000; // Допуск в lamports для комиссий
 
       if (Math.abs(amountTransferred - expectedLamports) > tolerance) {
@@ -76,10 +91,16 @@ class ClientPaymentService {
         amount: amountTransferred / 1_000_000_000,
         blockTime: transaction.blockTime,
       };
-    } catch (error) {
-      logger.error('Failed to verify transaction', { signature, error: error.message });
-      return { valid: false, error: error.message };
+      } catch (error) {
+        if (attempt >= maxAttempts) {
+          logger.error('Failed to verify transaction', { signature, error: error.message });
+          return { valid: false, error: error.message };
+        }
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
     }
+
+    return { valid: false, error: 'Transaction not found after retries' };
   }
 
   /**

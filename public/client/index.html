@@ -39,6 +39,36 @@
         </div>
       </section>
 
+      <!-- Настройки RPC -->
+      <section class="panel settings-section">
+        <h2>Настройки RPC (Solana)</h2>
+        <p class="settings-description">Helius даёт стабильный RPC с платным тарифом. Ключ сохраняется на сервере.</p>
+        <div class="settings-form">
+          <label>
+            Провайдер
+            <select id="rpc-provider">
+              <option value="helius">Helius (рекомендуется)</option>
+              <option value="public">Публичный (Solana)</option>
+              <option value="custom">Свой URL</option>
+            </select>
+          </label>
+          <div id="rpc-helius-row" class="rpc-option">
+            <label>
+              Helius API ключ
+              <input id="rpc-helius-key" type="password" placeholder="Вставьте API ключ из dashboard.helius.dev" autocomplete="off" />
+            </label>
+          </div>
+          <div id="rpc-custom-row" class="rpc-option hidden">
+            <label>
+              URL RPC
+              <input id="rpc-custom-url" type="url" placeholder="https://..." />
+            </label>
+          </div>
+          <p class="rpc-current" id="rpc-current-display">Текущий RPC: загрузка...</p>
+          <button type="button" id="settings-save" class="btn-primary">Сохранить настройки</button>
+        </div>
+      </section>
+
       <!-- Direct режим: Список роботов -->
       <section id="direct-mode" class="panel">
         <h2>Доступные роботы</h2>
@@ -100,14 +130,20 @@
 
     <script>
       // Загружаем Solana Web3.js и делаем доступным глобально
-      (async function() {
+      (function() {
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.js';
         script.onload = function() {
-          // Solana Web3.js экспортирует в window.solanaWeb3
-          if (window.solanaWeb3) {
+          // IIFE может экспортировать в window.solanaWeb3 или в глобальную переменную
+          if (typeof window.solanaWeb3 !== 'undefined') {
+            window.solanaWeb3Ready = true;
+            console.log('Solana Web3.js loaded');
+          } else if (typeof solanaWeb3 !== 'undefined') {
+            window.solanaWeb3 = solanaWeb3;
+            window.solanaWeb3Ready = true;
             console.log('Solana Web3.js loaded');
           }
+          if (window.onSolanaWeb3Ready) window.onSolanaWeb3Ready();
         };
         document.head.appendChild(script);
       })();

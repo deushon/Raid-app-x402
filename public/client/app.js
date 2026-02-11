@@ -1,6 +1,6 @@
 // Wallet integration - используем глобальный объект window.solana
 const API_BASE = '/api/client';
-const SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com'; // Можно сделать настраиваемым
+let currentRpcUrl = 'https://api.mainnet-beta.solana.com';
 
 // Solana Web3.js загружается через script tag в HTML
 let SolanaWeb3 = null;
@@ -53,6 +53,7 @@ let currentAction = null;
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    await loadSettings();
     await loadSolanaWeb3();
     initConnection();
     setupEventListeners();
@@ -64,8 +65,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initConnection() {
-  if (SolanaWeb3 && SolanaWeb3.Connection) {
-    connection = new SolanaWeb3.Connection(SOLANA_RPC_URL, 'confirmed');
+  if (SolanaWeb3 && SolanaWeb3.Connection && currentRpcUrl) {
+    connection = new SolanaWeb3.Connection(currentRpcUrl, 'confirmed');
   }
 }
 
@@ -78,10 +79,96 @@ function setupEventListeners() {
   document.getElementById('connect-wallet').addEventListener('click', connectWallet);
   document.getElementById('disconnect-wallet').addEventListener('click', disconnectWallet);
 
+  // Settings
+  const rpcProvider = document.getElementById('rpc-provider');
+  const saveSettingsBtn = document.getElementById('settings-save');
+  if (rpcProvider) {
+    rpcProvider.addEventListener('change', updateRpcOptionVisibility);
+  }
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', saveSettingsFromUI);
+  }
+
   // Action execution
   document.getElementById('execute-action').addEventListener('click', executeAction);
   document.getElementById('confirm-payment').addEventListener('click', confirmPayment);
   document.getElementById('cancel-payment').addEventListener('click', cancelPayment);
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/settings`);
+    const data = await res.json();
+    if (data.solanaRpcUrl) {
+      currentRpcUrl = data.solanaRpcUrl;
+    }
+    const providerEl = document.getElementById('rpc-provider');
+    const heliusKeyEl = document.getElementById('rpc-helius-key');
+    const customUrlEl = document.getElementById('rpc-custom-url');
+    const currentDisplay = document.getElementById('rpc-current-display');
+    if (providerEl) providerEl.value = data.rpcProvider || 'helius';
+    if (heliusKeyEl && data.hasHeliusKey) heliusKeyEl.placeholder = '•••••••• (уже задан)';
+    if (customUrlEl && data.customRpcUrl) customUrlEl.value = data.customRpcUrl;
+    if (currentDisplay) {
+      const short = data.solanaRpcUrl ? data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***') : currentRpcUrl;
+      currentDisplay.textContent = `Текущий RPC: ${short}`;
+    }
+    updateRpcOptionVisibility();
+  } catch (e) {
+    console.warn('Could not load RPC settings', e);
+    const currentDisplay = document.getElementById('rpc-current-display');
+    if (currentDisplay) currentDisplay.textContent = `Текущий RPC: ${currentRpcUrl}`;
+  }
+}
+
+function updateRpcOptionVisibility() {
+  const provider = document.getElementById('rpc-provider')?.value || 'helius';
+  const heliusRow = document.getElementById('rpc-helius-row');
+  const customRow = document.getElementById('rpc-custom-row');
+  if (heliusRow) heliusRow.classList.toggle('hidden', provider !== 'helius');
+  if (customRow) customRow.classList.toggle('hidden', provider !== 'custom');
+}
+
+async function saveSettingsFromUI() {
+  const provider = document.getElementById('rpc-provider')?.value || 'helius';
+  const heliusKey = document.getElementById('rpc-helius-key')?.value?.trim() || '';
+  const customUrl = document.getElementById('rpc-custom-url')?.value?.trim() || '';
+  const btn = document.getElementById('settings-save');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Сохранение...';
+  }
+  try {
+    const res = await fetch(`${API_BASE}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rpcProvider: provider,
+        heliusApiKey: heliusKey || undefined,
+        customRpcUrl: provider === 'custom' ? customUrl : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Ошибка сохранения');
+    if (data.solanaRpcUrl) {
+      currentRpcUrl = data.solanaRpcUrl;
+      initConnection();
+      if (walletPublicKey) updateWalletBalance();
+    }
+    const currentDisplay = document.getElementById('rpc-current-display');
+    if (currentDisplay) {
+      const short = data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***');
+      currentDisplay.textContent = `Текущий RPC: ${short}`;
+    }
+    showNotification('Настройки RPC сохранены', 'success');
+  } catch (e) {
+    showNotification('Ошибка: ' + (e.message || 'не удалось сохранить'), 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Сохранить настройки';
+    }
+  }
 }
 
 function setMode(mode) {
@@ -339,6 +426,10 @@ async function connectWallet() {
   }
 
   try {
+    // Повторно проверяем загрузку Solana Web3 (скрипт мог загрузиться после DOMContentLoaded)
+    await loadSolanaWeb3();
+    initConnection();
+
     // Подключаемся к кошельку
     if (provider.connect) {
       await provider.connect();
@@ -437,20 +528,55 @@ async function executeAction() {
   }
 }
 
+/**
+ * Парсит тело ответа 402 в единый формат invoice (x402 V2: accepts[0] или legacy).
+ */
+function parse402Invoice(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.x402Version === 2 && Array.isArray(data.accepts) && data.accepts.length > 0) {
+    const a = data.accepts[0];
+    const ref = a?.extra?.reference;
+    const payTo = a?.payTo;
+    if (ref && payTo && (a?.amount != null) && a?.asset) {
+      return { reference: ref, receiver: payTo, amount: a.amount, asset: a.asset };
+    }
+  }
+  const ref = data.reference;
+  const to = data.receiver ?? data.payTo;
+  if (ref && to && (data.amount != null) && data.asset) {
+    return { reference: ref, receiver: to, amount: data.amount, asset: data.asset };
+  }
+  return null;
+}
+
+/**
+ * Собирает параметры из контейнера #action-form (это div с input/select, не HTML form).
+ * FormData принимает только HTMLFormElement, поэтому собираем значения вручную.
+ */
+function getActionFormParameters() {
+  const container = document.getElementById('action-form');
+  const parameters = {};
+  if (!container) return parameters;
+  const inputs = container.querySelectorAll('input, select, textarea');
+  inputs.forEach((el) => {
+    const name = el.getAttribute('name');
+    if (!name) return;
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      if (el.checked) parameters[name] = el.value || 'on';
+    } else {
+      parameters[name] = el.value;
+    }
+  });
+  return parameters;
+}
+
 async function initiateCommand() {
   if (!currentAction) {
     throw new Error('No action selected');
   }
 
   try {
-    // Определяем параметры команды
-    const form = document.getElementById('action-form');
-    const formData = new FormData(form);
-    const parameters = {};
-    
-    for (const [key, value] of formData.entries()) {
-      parameters[key] = value;
-    }
+    const parameters = getActionFormParameters();
 
     // Получаем invoice от робота
     let robot;
@@ -509,8 +635,10 @@ async function initiateCommand() {
     });
 
     if (response.status === 402) {
-      // Получили invoice
-      const invoice = await response.json();
+      // Получили invoice (x402 V2: accepts[0] или legacy: верхний уровень)
+      const data = await response.json();
+      const invoice = parse402Invoice(data);
+      if (!invoice) throw new Error('Invalid 402 response: missing payment details');
       return invoice;
     } else if (response.status === 200) {
       // Команда выполнена без оплаты
@@ -610,14 +738,7 @@ async function confirmPayment() {
 
 async function submitPaymentConfirmation(signature, invoice) {
   try {
-    // Собираем параметры команды
-    const form = document.getElementById('action-form');
-    const formData = new FormData(form);
-    const parameters = {};
-    
-    for (const [key, value] of formData.entries()) {
-      parameters[key] = value;
-    }
+    const parameters = getActionFormParameters();
 
     const response = await fetch(`${API_BASE}/execute`, {
       method: 'POST',
@@ -641,11 +762,18 @@ async function submitPaymentConfirmation(signature, invoice) {
     });
 
     const result = await response.json();
-    
+
+    if (!response.ok) {
+      const msg = result.details ? `${result.error}: ${result.details}` : (result.error || 'Ошибка сервера');
+      showNotification(msg, 'error');
+      showExecutionStatus({ status: 'failed', error: msg });
+      return;
+    }
+
     if (result.refundRequired) {
       showNotification('Команда не выполнена. Возврат средств будет обработан.', 'info');
     }
-    
+
     showExecutionStatus(result);
   } catch (error) {
     showNotification('Ошибка подтверждения оплаты: ' + error.message, 'error');

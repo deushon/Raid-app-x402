@@ -4,9 +4,17 @@ const logger = require('../utils/logger');
 const ClientPaymentService = require('../services/clientPaymentService');
 const AIAgentService = require('../services/aiAgentService');
 
-const createClientRouter = ({ registry, commandRouter, x402Service, config }) => {
+const createClientRouter = ({
+  registry,
+  commandRouter,
+  x402Service,
+  config,
+  getSolanaRpcUrl,
+  getSettings,
+  saveSettings,
+}) => {
   const clientPaymentService = new ClientPaymentService({
-    solanaRpcUrl: config?.x402?.solana?.rpcUrl || process.env.X402_SOLANA_RPC_URL,
+    getRpcUrl: getSolanaRpcUrl || (() => config?.x402?.solana?.rpcUrl || process.env.X402_SOLANA_RPC_URL),
     commitment: config?.x402?.solana?.commitment || 'confirmed',
   });
 
@@ -14,6 +22,37 @@ const createClientRouter = ({ registry, commandRouter, x402Service, config }) =>
     config: config?.aiAgent || {},
   });
   const router = express.Router();
+
+  /**
+   * Получить настройки (RPC URL для клиента, провайдер, без сырого API ключа)
+   */
+  router.get('/settings', (req, res) => {
+    try {
+      const settings = getSettings ? getSettings() : {};
+      res.json(settings);
+    } catch (error) {
+      logger.error('Failed to get client settings', { error: error.message });
+      res.status(500).json({ error: 'Failed to get settings' });
+    }
+  });
+
+  /**
+   * Сохранить настройки RPC (провайдер, Helius API ключ, кастомный URL)
+   */
+  router.post('/settings', (req, res) => {
+    try {
+      const { rpcProvider, heliusApiKey, customRpcUrl } = req.body || {};
+      const updated = saveSettings ? saveSettings({
+        rpcProvider,
+        heliusApiKey,
+        customRpcUrl,
+      }) : {};
+      res.json(updated);
+    } catch (error) {
+      logger.error('Failed to save client settings', { error: error.message });
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  });
 
   /**
    * Получить список доступных роботов (для Direct режима)
@@ -344,9 +383,9 @@ const createClientRouter = ({ registry, commandRouter, x402Service, config }) =>
 
       let response;
       try {
-        // Если робот требует x402, отправляем с подписью платежа
+        // Повторный POST на робота после оплаты: всегда шлём reference, если он есть (сценарий 402 → pay → retry)
         const headers = {};
-        if (robot.requiresX402 && paymentTransaction.reference) {
+        if (paymentTransaction.reference) {
           headers['X-X402-Reference'] = paymentTransaction.reference;
         }
 
