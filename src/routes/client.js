@@ -253,6 +253,72 @@ const createClientRouter = ({
   });
 
   /**
+   * Get invoice from robot (proxy request). Client must use this instead of calling robot directly
+   * so remote testers can reach robots on private network.
+   */
+  router.post('/invoice', async (req, res) => {
+    try {
+      const { mode, robotId, command, parameters = {} } = req.body;
+
+      if (!mode || (mode !== 'direct' && mode !== 'raid')) {
+        return res.status(400).json({ error: 'Invalid mode' });
+      }
+
+      let robot;
+      if (mode === 'direct') {
+        if (!robotId) return res.status(400).json({ error: 'robotId required for direct mode' });
+        robot = registry.getById(robotId);
+        if (!robot) return res.status(404).json({ error: 'Robot not found' });
+      } else {
+        const robots = registry.list().filter((r) => r.status.state === 'ready');
+        const withCommand = robots.filter((r) => {
+          const methods = r.status?.availableMethods || [];
+          return methods.some((m) => {
+            const path = (typeof m === 'object' ? m.path : m) || '';
+            return String(path).toLowerCase().includes(String(command).toLowerCase());
+          });
+        });
+        if (withCommand.length === 0) return res.status(404).json({ error: 'No robot for this command' });
+        try {
+          const sel = await aiAgentService.selectExecutor({ robots: withCommand, command, parameters, context: {} });
+          robot = sel.robot;
+        } catch {
+          robot = withCommand[0];
+        }
+      }
+
+      if (robot.status.state !== 'ready') {
+        return res.status(409).json({ error: 'Robot not ready' });
+      }
+
+      const methods = robot.status?.availableMethods || [];
+      const method = methods.find((m) => {
+        const path = (typeof m === 'object' ? m.path : m) || '';
+        return String(path).toLowerCase().includes(String(command).toLowerCase());
+      });
+      const endpoint = method && typeof method === 'object' && method.path
+        ? method.path
+        : `/commands/${command}`;
+
+      const url = `http://${robot.host}:${robot.port}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+
+      const response = await axios.post(url, parameters, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: config?.robots?.commandTimeoutMs || 8000,
+        validateStatus: (s) => s === 200 || s === 402,
+      });
+
+      res.status(response.status).json(response.data);
+    } catch (error) {
+      if (error.response) {
+        return res.status(error.response.status).json(error.response.data || { error: error.message });
+      }
+      logger.error('Invoice proxy failed', { error: error.message });
+      res.status(500).json({ error: error.message || 'Failed to get invoice' });
+    }
+  });
+
+  /**
    * Execute action with client payment (retry to robot with X-X402-Reference).
    */
   router.post('/execute', async (req, res) => {

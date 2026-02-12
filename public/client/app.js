@@ -331,39 +331,87 @@ async function estimatePrice() {
   }
 }
 
-async function connectWallet() {
-  // Support multiple Solana wallets
-  let provider = null;
+const WALLET_CONFIGS = [
+  { id: 'phantom', name: 'Phantom', getProvider: () => (window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null)) },
+  { id: 'backpack', name: 'Backpack', getProvider: () => window.backpack || null },
+  { id: 'solflare', name: 'Solflare', getProvider: () => window.solflare || null },
+  { id: 'glow', name: 'Glow', getProvider: () => window.glow || null },
+  { id: 'solana', name: 'Solana (Standard)', getProvider: () => (window.solana && !window.solana.isPhantom ? window.solana : null) },
+];
 
-  // Check wallet providers
-  if (typeof window.solana !== 'undefined') {
-    provider = window.solana;
-  } else if (typeof window.solflare !== 'undefined') {
-    provider = window.solflare;
-  } else if (typeof window.backpack !== 'undefined') {
-    provider = window.backpack;
-  } else if (typeof window.phantom !== 'undefined') {
-    provider = window.phantom;
+function getAvailableWallets() {
+  const list = [];
+  const seen = new Set();
+  for (const config of WALLET_CONFIGS) {
+    try {
+      const p = config.getProvider();
+      if (p && typeof p.connect === 'function' && !seen.has(p)) {
+        seen.add(p);
+        list.push({ ...config, provider: p });
+      }
+    } catch (_) { /* ignore MetaMask/extension conflicts */ }
   }
+  return list;
+}
 
-  if (!provider) {
+function showWalletSelector() {
+  const modal = document.getElementById('wallet-selector-modal');
+  const listEl = document.getElementById('wallet-selector-list');
+  const wallets = getAvailableWallets();
+
+  if (wallets.length === 0) {
     showNotification('Solana wallet not found. Install Phantom, Backpack, Solflare or another Solana wallet.', 'error');
     return;
   }
 
+  listEl.innerHTML = wallets.map(w => 
+    `<button type="button" class="wallet-option" data-wallet-id="${w.id}">${w.name}</button>`
+  ).join('');
+
+  listEl.querySelectorAll('.wallet-option').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const w = wallets.find(x => x.id === btn.dataset.walletId);
+      if (w) {
+        // Don't hide modal yet — keeps user gesture active for Phantom popup in incognito
+        connectWithProvider(w.provider).finally(() => {
+          modal.classList.add('hidden');
+        });
+      }
+    });
+  });
+
+  document.getElementById('wallet-selector-cancel').onclick = () => modal.classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
+const CONNECT_TIMEOUT_MS = 45000;
+
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
+
+async function connectWithProvider(provider) {
   try {
-    // Re-check Solana Web3 load (script may load after DOMContentLoaded)
+    // Call connect() first while user gesture is still active (helps Phantom popup in incognito)
+    let connectPromise = Promise.resolve();
+    if (provider.connect) {
+      connectPromise = Promise.resolve(provider.connect());
+    } else if (provider.isConnected && !provider.isConnected()) {
+      connectPromise = Promise.resolve(provider.connect());
+    }
+
+    await withTimeout(
+      connectPromise,
+      CONNECT_TIMEOUT_MS,
+      'Connection timed out. Allow popups for this site (browser bar or site settings), especially in incognito.',
+    );
+
     await loadSolanaWeb3();
     initConnection();
 
-    // Connect wallet
-    if (provider.connect) {
-      await provider.connect();
-    } else if (provider.isConnected && !provider.isConnected()) {
-      await provider.connect();
-    }
-
-    // Get public key
     let publicKey;
     if (provider.publicKey) {
       publicKey = provider.publicKey;
@@ -379,16 +427,29 @@ async function connectWallet() {
         ? new SolanaWeb3.PublicKey(publicKey)
         : publicKey;
     } else {
-      // Fallback: store as string if library not loaded
       walletPublicKey = typeof publicKey === 'string' ? publicKey : publicKey.toString();
     }
 
     updateWalletUI();
     await updateWalletBalance();
-
     showNotification('Wallet connected', 'success');
   } catch (error) {
     showNotification('Wallet connection error: ' + error.message, 'error');
+  }
+}
+
+async function connectWallet() {
+  const wallets = getAvailableWallets();
+
+  if (wallets.length === 0) {
+    showNotification('Solana wallet not found. Install Phantom, Backpack, Solflare or another Solana wallet.', 'error');
+    return;
+  }
+
+  if (wallets.length === 1) {
+    connectWithProvider(wallets[0].provider);
+  } else {
+    showWalletSelector();
   }
 }
 
@@ -502,80 +563,41 @@ async function initiateCommand() {
 
   try {
     const parameters = getActionFormParameters();
+    const commandName = currentAction.mode === 'direct'
+      ? getMethodKey(currentAction.method)
+      : currentAction.command.name;
 
-    // Get invoice from robot
-    let robot;
-    let endpoint;
-    let commandName;
-
+    // Use server proxy — avoids ERR_CONNECTION_TIMED_OUT when robot is on private network
+    const body = {
+      mode: currentAction.mode,
+      command: commandName,
+      parameters,
+    };
     if (currentAction.mode === 'direct') {
-      robot = currentAction.robot;
-      commandName = getMethodKey(currentAction.method);
-      
-      // Resolve endpoint from method
-      if (typeof currentAction.method === 'object' && currentAction.method.path) {
-        endpoint = currentAction.method.path;
-      } else {
-        endpoint = `/commands/${commandName}`;
-      }
-    } else {
-      // RAID mode: get selected robot from server
-      const estimateResponse = await fetch(`${API_BASE}/estimate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'raid',
-          command: currentAction.command.name,
-        }),
-      });
-
-      const estimateData = await estimateResponse.json();
-      if (!estimateData.robot) {
-        throw new Error('No robot selected for RAID mode');
-      }
-
-      // Get full robot list
-      const robotsResponse = await fetch(`${API_BASE}/robots`);
-      const robotsData = await robotsResponse.json();
-      robot = robotsData.robots.find(r => r.id === estimateData.robot.id);
-      
-      if (!robot) {
-        throw new Error('Selected robot not found');
-      }
-
-      commandName = currentAction.command.name;
-      endpoint = currentAction.command.httpMethod 
-        ? `${currentAction.command.httpMethod} ${currentAction.command.name}`
-        : `/commands/${commandName}`;
+      body.robotId = currentAction.robot.id;
     }
 
-    // Request robot for invoice
-    const baseUrl = `http://${robot.host}:${robot.port}`;
-    const url = `${baseUrl}${endpoint}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE}/invoice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parameters),
+      body: JSON.stringify(body),
     });
 
+    const data = await response.json().catch(() => ({}));
+
     if (response.status === 402) {
-      // Got invoice (x402 V2 accepts[0] or legacy top-level)
-      const data = await response.json();
       const invoice = parse402Invoice(data);
       if (!invoice) throw new Error('Invalid 402 response: missing payment details');
       return invoice;
     } else if (response.status === 200) {
-      // Command executed without payment
-      const result = await response.json();
       showExecutionStatus({
         status: 'success',
         message: 'Command executed successfully',
-        response: result,
+        response: data,
       });
       return null;
     } else {
-      throw new Error(`Robot returned status ${response.status}`);
+      throw new Error(data.error || `Request failed (${response.status})`);
     }
   } catch (error) {
     showNotification('Command initiation error: ' + error.message, 'error');
@@ -618,6 +640,11 @@ async function confirmPayment() {
       throw new Error('Solana Web3.js library not loaded');
     }
 
+    const amountNum = Number(invoice.amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      throw new Error('Invalid invoice amount');
+    }
+
     // Build transaction
     const transaction = new SolanaWeb3.Transaction().add(
       SolanaWeb3.SystemProgram.transfer({
@@ -625,7 +652,7 @@ async function confirmPayment() {
           ? new SolanaWeb3.PublicKey(walletPublicKey) 
           : walletPublicKey,
         toPubkey: new SolanaWeb3.PublicKey(invoice.receiver),
-        lamports: Math.round(invoice.amount * LAMPORTS_PER_SOL),
+        lamports: Math.round(amountNum * LAMPORTS_PER_SOL),
       })
     );
 
@@ -648,8 +675,11 @@ async function confirmPayment() {
     // Close modal
     document.getElementById('payment-modal').classList.add('hidden');
 
+    // Give RPC time to index the transaction before server verification
+    await new Promise((r) => setTimeout(r, 2500));
+
     // Send confirmation to server
-    await submitPaymentConfirmation(signature, invoice);
+    await submitPaymentConfirmation(signature, invoice, amountNum);
 
     showNotification('Payment completed', 'success');
     button.disabled = false;
@@ -661,7 +691,8 @@ async function confirmPayment() {
   }
 }
 
-async function submitPaymentConfirmation(signature, invoice) {
+async function submitPaymentConfirmation(signature, invoice, amountNum) {
+  const amount = amountNum !== undefined ? amountNum : Number(invoice.amount);
   try {
     const parameters = getActionFormParameters();
 
@@ -679,9 +710,10 @@ async function submitPaymentConfirmation(signature, invoice) {
         paymentTransaction: {
           signature,
           receiver: invoice.receiver,
-          amount: invoice.amount,
+          amount: Number.isFinite(amount) ? amount : invoice.amount,
           asset: invoice.asset,
           reference: invoice.reference,
+          sender: walletPublicKey ? (typeof walletPublicKey === 'string' ? walletPublicKey : walletPublicKey.toBase58()) : undefined,
         },
       }),
     });
@@ -691,7 +723,11 @@ async function submitPaymentConfirmation(signature, invoice) {
     if (!response.ok) {
       const msg = result.details ? `${result.error}: ${result.details}` : (result.error || 'Server error');
       showNotification(msg, 'error');
-      showExecutionStatus({ status: 'failed', error: msg });
+      showExecutionStatus({
+        status: 'failed',
+        error: msg,
+        message: result.details && result.details.includes('not found') ? 'Transaction not yet visible to server. Wait a few seconds and try again, or retry the action.' : undefined,
+      });
       return;
     }
 
@@ -711,10 +747,11 @@ function showExecutionStatus(result) {
   
   section.classList.remove('hidden');
   
+  const msg = result.message || (result.status === 'failed' ? 'No message' : '');
   content.innerHTML = `
     <div class="status-item ${result.status}">
       <p><strong>Status:</strong> ${result.status}</p>
-      <p><strong>Message:</strong> ${result.message || 'No message'}</p>
+      ${msg ? `<p><strong>Message:</strong> ${msg}</p>` : ''}
       ${result.error ? `<p><strong>Error:</strong> ${result.error}</p>` : ''}
     </div>
   `;
@@ -733,24 +770,37 @@ function showNotification(message, type = 'info') {
   }, 5000);
 }
 
-// Listen for wallet events
-window.addEventListener('load', () => {
-  if (window.solana && window.solana.isPhantom) {
-    window.solana.on('connect', () => {
-      if (window.solana.publicKey) {
-        wallet = window.solana;
-        if (SolanaWeb3 && SolanaWeb3.PublicKey) {
-          walletPublicKey = new SolanaWeb3.PublicKey(window.solana.publicKey);
-        } else {
-          walletPublicKey = window.solana.publicKey.toString();
-        }
-        updateWalletUI();
-        updateWalletBalance();
+// Listen for wallet events (Phantom, Backpack, etc. use similar API)
+function setupWalletEventListeners() {
+  try {
+    const providers = [
+      window.phantom?.solana,
+      window.solana?.isPhantom ? window.solana : null,
+      window.backpack,
+      window.solflare,
+    ].filter(Boolean);
+    const seen = new Set();
+    for (const p of providers) {
+      if (!p || seen.has(p)) continue;
+      seen.add(p);
+      if (typeof p.on === 'function') {
+        p.on?.('connect', () => {
+          if (p.publicKey && wallet === p) {
+            if (SolanaWeb3 && SolanaWeb3.PublicKey) {
+              walletPublicKey = new SolanaWeb3.PublicKey(p.publicKey);
+            } else {
+              walletPublicKey = p.publicKey.toString();
+            }
+            updateWalletUI();
+            updateWalletBalance();
+          }
+        });
+        p.on?.('disconnect', () => {
+          if (wallet === p) disconnectWallet();
+        });
       }
-    });
+    }
+  } catch (_) { /* ignore MetaMask/extension conflicts */ }
+}
 
-    window.solana.on('disconnect', () => {
-      disconnectWallet();
-    });
-  }
-});
+window.addEventListener('load', setupWalletEventListeners);

@@ -81,6 +81,18 @@
       </section>
     </main>
 
+    <!-- Wallet selector modal -->
+    <div id="wallet-selector-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Select wallet</h2>
+        <p class="wallet-selector-hint">Choose Solana wallet to connect. When opening the site by IP (not localhost), Phantom may not open — use Backpack. In incognito, allow popups. MetaMask is for Ethereum and not used here.</p>
+        <div id="wallet-selector-list" class="wallet-selector-list">
+          <!-- Filled by JS -->
+        </div>
+        <button type="button" id="wallet-selector-cancel" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+
     <!-- Payment modal -->
     <div id="payment-modal" class="modal hidden">
       <div class="modal-content">
