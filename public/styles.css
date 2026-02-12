@@ -186,6 +186,20 @@ button:hover {
   color: #f87171;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.rpc-option {
+  margin-top: 0.5rem;
+}
+
+.panel-description {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+
 .commands {
   display: grid;
   gap: 1.25rem;

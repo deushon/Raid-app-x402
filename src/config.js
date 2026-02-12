@@ -131,10 +131,12 @@ const loadConfig = (argv = []) => {
 };
 
 const HELIUS_MAINNET_URL = 'https://mainnet.helius-rpc.com/?api-key=';
-const PUBLIC_RPC_URL = 'https://api.mainnet-beta.solana.com';
+// PublicNode — бесплатный, без 403; mainnet-beta.solana.com часто блокирует запросы
+const PUBLIC_RPC_URL = 'https://solana-rpc.publicnode.com';
 
 /**
  * Returns resolved Solana RPC URL from settings (provider + key or custom URL).
+ * mainnet-beta.solana.com часто блокирует (403), поэтому не используем его как fallback.
  * @param {{ rpcProvider?: string, heliusApiKey?: string, rpcUrl?: string }} solana
  */
 const buildSolanaRpcUrl = (solana = {}) => {
@@ -145,7 +147,11 @@ const buildSolanaRpcUrl = (solana = {}) => {
   if (provider === 'helius' && solana.heliusApiKey) {
     return `${HELIUS_MAINNET_URL}${solana.heliusApiKey}`;
   }
-  return solana.rpcUrl || PUBLIC_RPC_URL;
+  const fallback = solana.rpcUrl;
+  if (fallback && !fallback.includes('mainnet-beta.solana.com')) {
+    return fallback;
+  }
+  return PUBLIC_RPC_URL;
 };
 
 module.exports = {

@@ -62,6 +62,17 @@ const api = {
       body: data,
     });
   },
+
+  getClientSettings() {
+    return this.request('/api/admin/client-settings');
+  },
+
+  saveClientSettings(data) {
+    return this.request('/api/admin/client-settings', {
+      method: 'POST',
+      body: data,
+    });
+  },
 };
 
 const setMessage = (element, message, type) => {
@@ -406,9 +417,61 @@ const loadAiAgentConfig = async () => {
   }
 };
 
+// RPC settings form (admin panel)
+const rpcSettingsForm = document.getElementById('rpc-settings-form');
+const rpcSettingsMessage = document.getElementById('rpc-settings-message');
+const rpcProviderSelect = document.getElementById('rpc-provider');
+const rpcHeliusRow = document.getElementById('rpc-helius-row');
+const rpcCustomRow = document.getElementById('rpc-custom-row');
+
+const updateRpcOptionVisibility = () => {
+  const provider = rpcProviderSelect?.value || 'helius';
+  if (rpcHeliusRow) rpcHeliusRow.classList.toggle('hidden', provider !== 'helius');
+  if (rpcCustomRow) rpcCustomRow.classList.toggle('hidden', provider !== 'custom');
+};
+
+const loadClientSettings = async () => {
+  try {
+    const data = await api.getClientSettings();
+    if (rpcProviderSelect) rpcProviderSelect.value = data.rpcProvider || 'public';
+    const heliusInput = document.getElementById('rpc-helius-key');
+    if (heliusInput && data.hasHeliusKey) heliusInput.placeholder = '•••••••• (уже задан)';
+    const customInput = document.getElementById('rpc-custom-url');
+    if (customInput && data.customRpcUrl) customInput.value = data.customRpcUrl;
+    updateRpcOptionVisibility();
+  } catch (e) {
+    console.warn('Failed to load RPC settings', e);
+    updateRpcOptionVisibility();
+  }
+};
+
+if (rpcProviderSelect) {
+  rpcProviderSelect.addEventListener('change', updateRpcOptionVisibility);
+}
+if (rpcSettingsForm) {
+  rpcSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(rpcSettingsForm);
+    const provider = formData.get('rpcProvider') || 'public';
+    const heliusKey = formData.get('heliusApiKey')?.trim() || '';
+    const customUrl = formData.get('customRpcUrl')?.trim() || '';
+    try {
+      await api.saveClientSettings({
+        rpcProvider: provider,
+        heliusApiKey: heliusKey || undefined,
+        customRpcUrl: provider === 'custom' ? customUrl : undefined,
+      });
+      setMessage(rpcSettingsMessage, 'RPC settings saved', 'success');
+    } catch (err) {
+      setMessage(rpcSettingsMessage, err.message || 'Failed to save', 'error');
+    }
+  });
+}
+
 setInterval(renderRobots, 15000);
 initMap();
 renderRobots();
 renderAvailableActions();
 loadAiAgentConfig();
+loadClientSettings();
 

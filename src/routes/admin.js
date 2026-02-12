@@ -5,7 +5,7 @@ const logger = require('../utils/logger');
 
 const CONFIG_FILE = path.join(process.cwd(), 'config', 'ai-agent.json');
 
-const createAdminRouter = () => {
+const createAdminRouter = ({ settingsStore } = {}) => {
   const router = express.Router();
 
   /**
@@ -51,6 +51,42 @@ const createAdminRouter = () => {
     } catch (error) {
       logger.error('Failed to save AI agent config', { error: error.message });
       res.status(500).json({ error: 'Failed to save configuration' });
+    }
+  });
+
+  /**
+   * Get client RPC settings (Solana / Helius).
+   */
+  router.get('/client-settings', (req, res) => {
+    try {
+      const settings = settingsStore?.getSettings?.() ?? {};
+      res.json({
+        rpcProvider: settings.rpcProvider || 'public',
+        hasHeliusKey: Boolean(settings.hasHeliusKey),
+        customRpcUrl: settings.customRpcUrl || null,
+      });
+    } catch (error) {
+      logger.error('Failed to get client settings', { error: error.message });
+      res.status(500).json({ error: 'Failed to get settings' });
+    }
+  });
+
+  /**
+   * Save client RPC settings (Helius, custom URL).
+   */
+  router.post('/client-settings', (req, res) => {
+    try {
+      const { rpcProvider, heliusApiKey, customRpcUrl } = req.body ?? {};
+      const updated = settingsStore?.saveSettings?.({
+        rpcProvider,
+        heliusApiKey,
+        customRpcUrl,
+      }) ?? {};
+      logger.info('Client RPC settings saved from admin', { rpcProvider: updated.rpcProvider });
+      res.json(updated);
+    } catch (error) {
+      logger.error('Failed to save client settings', { error: error.message });
+      res.status(500).json({ error: 'Failed to save settings' });
     }
   });
 

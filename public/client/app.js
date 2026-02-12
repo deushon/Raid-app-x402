@@ -1,6 +1,6 @@
 // Wallet integration uses global window.solana
 const API_BASE = '/api/client';
-let currentRpcUrl = 'https://api.mainnet-beta.solana.com';
+let currentRpcUrl = 'https://solana-rpc.publicnode.com';
 
 // Solana Web3.js is loaded via script tag in HTML
 let SolanaWeb3 = null;
@@ -79,16 +79,6 @@ function setupEventListeners() {
   document.getElementById('connect-wallet').addEventListener('click', connectWallet);
   document.getElementById('disconnect-wallet').addEventListener('click', disconnectWallet);
 
-  // Settings
-  const rpcProvider = document.getElementById('rpc-provider');
-  const saveSettingsBtn = document.getElementById('settings-save');
-  if (rpcProvider) {
-    rpcProvider.addEventListener('change', updateRpcOptionVisibility);
-  }
-  if (saveSettingsBtn) {
-    saveSettingsBtn.addEventListener('click', saveSettingsFromUI);
-  }
-
   // Action execution
   document.getElementById('execute-action').addEventListener('click', executeAction);
   document.getElementById('confirm-payment').addEventListener('click', confirmPayment);
@@ -102,72 +92,8 @@ async function loadSettings() {
     if (data.solanaRpcUrl) {
       currentRpcUrl = data.solanaRpcUrl;
     }
-    const providerEl = document.getElementById('rpc-provider');
-    const heliusKeyEl = document.getElementById('rpc-helius-key');
-    const customUrlEl = document.getElementById('rpc-custom-url');
-    const currentDisplay = document.getElementById('rpc-current-display');
-    if (providerEl) providerEl.value = data.rpcProvider || 'helius';
-    if (heliusKeyEl && data.hasHeliusKey) heliusKeyEl.placeholder = '•••••••• (already set)';
-    if (customUrlEl && data.customRpcUrl) customUrlEl.value = data.customRpcUrl;
-    if (currentDisplay) {
-      const short = data.solanaRpcUrl ? data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***') : currentRpcUrl;
-      currentDisplay.textContent = `Current RPC: ${short}`;
-    }
-    updateRpcOptionVisibility();
   } catch (e) {
-    console.warn('Could not load RPC settings', e);
-    const currentDisplay = document.getElementById('rpc-current-display');
-    if (currentDisplay) currentDisplay.textContent = `Current RPC: ${currentRpcUrl}`;
-  }
-}
-
-function updateRpcOptionVisibility() {
-  const provider = document.getElementById('rpc-provider')?.value || 'helius';
-  const heliusRow = document.getElementById('rpc-helius-row');
-  const customRow = document.getElementById('rpc-custom-row');
-  if (heliusRow) heliusRow.classList.toggle('hidden', provider !== 'helius');
-  if (customRow) customRow.classList.toggle('hidden', provider !== 'custom');
-}
-
-async function saveSettingsFromUI() {
-  const provider = document.getElementById('rpc-provider')?.value || 'helius';
-  const heliusKey = document.getElementById('rpc-helius-key')?.value?.trim() || '';
-  const customUrl = document.getElementById('rpc-custom-url')?.value?.trim() || '';
-  const btn = document.getElementById('settings-save');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
-  }
-  try {
-    const res = await fetch(`${API_BASE}/settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rpcProvider: provider,
-        heliusApiKey: heliusKey || undefined,
-        customRpcUrl: provider === 'custom' ? customUrl : undefined,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to save');
-    if (data.solanaRpcUrl) {
-      currentRpcUrl = data.solanaRpcUrl;
-      initConnection();
-      if (walletPublicKey) updateWalletBalance();
-    }
-    const currentDisplay = document.getElementById('rpc-current-display');
-    if (currentDisplay) {
-      const short = data.solanaRpcUrl.replace(/api-key=[^&]+/, 'api-key=***');
-      currentDisplay.textContent = `Current RPC: ${short}`;
-    }
-    showNotification('RPC settings saved', 'success');
-  } catch (e) {
-    showNotification('Error: ' + (e.message || 'Failed to save'), 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Save settings';
-    }
+    console.warn('Could not load RPC settings from server', e);
   }
 }
 

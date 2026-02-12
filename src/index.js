@@ -95,7 +95,7 @@ const bootstrap = () => {
     getSettings: settingsStore.getSettings,
     saveSettings: settingsStore.saveSettings,
   }));
-  app.use('/api/admin', createAuthMiddleware(), createAdminRouter());
+  app.use('/api/admin', createAuthMiddleware(), createAdminRouter({ settingsStore }));
 
   /**
    * @openapi

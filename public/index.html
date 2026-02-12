@@ -58,6 +58,36 @@
         <div id="robot-form-message" class="message"></div>
       </section>
 
+      <section class="panel solana-rpc-panel">
+        <h2>Solana RPC (Helius)</h2>
+        <p class="panel-description">RPC для клиентской страницы и проверки платежей. Helius рекомендуется.</p>
+        <form id="rpc-settings-form">
+          <label>
+            Provider
+            <select name="rpcProvider" id="rpc-provider">
+              <option value="helius">Helius</option>
+              <option value="public">Public (Solana)</option>
+              <option value="custom">Custom URL</option>
+            </select>
+          </label>
+          <div id="rpc-helius-row" class="rpc-option">
+            <label>
+              Helius API key
+              <input name="heliusApiKey" id="rpc-helius-key" type="password" placeholder="From dashboard.helius.dev" autocomplete="off" />
+              <small>Уже задан, если поле пусто и вы не меняете провайдера</small>
+            </label>
+          </div>
+          <div id="rpc-custom-row" class="rpc-option hidden">
+            <label>
+              Custom RPC URL
+              <input name="customRpcUrl" id="rpc-custom-url" type="url" placeholder="https://..." />
+            </label>
+          </div>
+          <button type="submit">Save RPC settings</button>
+        </form>
+        <div id="rpc-settings-message" class="message"></div>
+      </section>
+
       <section class="panel ai-agent-panel">
         <h2>AI Agent Configuration</h2>
         <form id="ai-agent-form">

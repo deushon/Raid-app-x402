@@ -39,36 +39,6 @@
         </div>
       </section>
 
-      <!-- RPC settings -->
-      <section class="panel settings-section">
-        <h2>RPC settings (Solana)</h2>
-        <p class="settings-description">Helius provides stable RPC. API key is stored on the server.</p>
-        <div class="settings-form">
-          <label>
-            Provider
-            <select id="rpc-provider">
-              <option value="helius">Helius (recommended)</option>
-              <option value="public">Public (Solana)</option>
-              <option value="custom">Custom URL</option>
-            </select>
-          </label>
-          <div id="rpc-helius-row" class="rpc-option">
-            <label>
-              Helius API key
-              <input id="rpc-helius-key" type="password" placeholder="Paste API key from dashboard.helius.dev" autocomplete="off" />
-            </label>
-          </div>
-          <div id="rpc-custom-row" class="rpc-option hidden">
-            <label>
-              RPC URL
-              <input id="rpc-custom-url" type="url" placeholder="https://..." />
-            </label>
-          </div>
-          <p class="rpc-current" id="rpc-current-display">Current RPC: loading...</p>
-          <button type="button" id="settings-save" class="btn-primary">Save settings</button>
-        </div>
-      </section>
-
       <!-- Direct: robots list -->
       <section id="direct-mode" class="panel">
         <h2>Available robots</h2>
