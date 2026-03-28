@@ -25,6 +25,13 @@ const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
   const { server } = config;
 
+  if (server.host === '127.0.0.1' || server.host === '::1') {
+    logger.warn(
+      'Server is bound to loopback only; other machines cannot open API/UI. '
+      + 'Use HOST=0.0.0.0 (default) to listen on all interfaces.',
+    );
+  }
+
   if (config.database.url && !config.teleoperator.jwtSecret) {
     logger.error('TELEOPERATOR_JWT_SECRET is required when DATABASE_URL is set');
     process.exit(1);

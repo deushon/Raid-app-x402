@@ -17,8 +17,6 @@
   "description": "Service orchestrating robot endpoints with x402-enabled payments and control logic.",
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
-    "@solana/wallet-adapter-base": "^0.9.23",
-    "@solana/wallet-adapter-wallets": "^0.19.32",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bs58": "^6.0.0",

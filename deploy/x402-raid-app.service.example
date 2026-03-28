@@ -1,0 +1,23 @@
+# Пример systemd-юнита для фонового запуска без Docker.
+# 1. sudo cp deploy/x402-raid-app.service.example /etc/systemd/system/x402-raid-app.service
+# 2. Отредактируйте WorkingDirectory, User, ExecStart (путь к node: which node), при необходимости EnvironmentFile.
+# 3. sudo systemctl daemon-reload && sudo systemctl enable --now x402-raid-app
+# 4. sudo systemctl status x402-raid-app
+
+[Unit]
+Description=x402 Raid App (Node.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# User=deploy
+WorkingDirectory=/opt/x402_raid_app
+EnvironmentFile=/opt/x402_raid_app/.env
+# Укажите полный путь к node (nvm: ~/.nvm/versions/node/v22.x.x/bin/node)
+ExecStart=/usr/bin/node /opt/x402_raid_app/src/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

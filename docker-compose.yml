@@ -1,13 +1,44 @@
-# Local PostgreSQL for teleoperator accounts (optional).
-# Start: docker compose up -d
-# Host port 5434 -> container 5432 (5432/5433 often taken by other stacks).
-# Then set DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid in .env
+# Full stack: PostgreSQL + Node app. Фон: restart: unless-stopped.
+# Запуск: docker compose up -d --build
+# Остановка: docker compose down
+# Логи: docker compose logs -f app
+#
+# В контейнере приложения DATABASE_URL указывает на сервис postgres (порт 5432 внутри сети).
+# Остальное из .env (ключи Solana, TELEOPERATOR_JWT_SECRET, ADMIN_*, и т.д.).
+# Персистентные JSON в config/ монтируются в контейнер.
+
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: x402
       POSTGRES_PASSWORD: x402
       POSTGRES_DB: x402raid
+    # Только с самого сервера (127.0.0.1). Приложение в Docker ходит в БД по имени postgres:5432.
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U x402 -d x402raid"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  app:
+    build: .
+    restart: unless-stopped
+    # Явно на всех интерфейсах хоста — доступ по IP/домену сервера, не только с localhost
+    ports:
+      - "0.0.0.0:${APP_HOST_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      # Внутри Docker-сети Postgres доступен по имени сервиса, не localhost
+      DATABASE_URL: postgres://x402:x402@postgres:5432/x402raid
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config

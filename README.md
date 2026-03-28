@@ -25,18 +25,39 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 
 ### Установка и запуск
 
+**Вариант A — всё в фоне (Docker, рекомендуется для сервера)**  
+Поднимаются **PostgreSQL** и **Node-приложение** с политикой **`restart: unless-stopped`** (после перезагрузки хоста контейнеры стартуют снова, при падении процесса — перезапуск).
+
+```bash
+cp config/env.example .env   # заполните ключи, TELEOPERATOR_JWT_SECRET, ADMIN_* и т.д.
+docker compose up -d --build
+```
+
+- API и UI доступны **по сети с любой машины** (если firewall пускает): **`http://<IP-или-DNS-сервера>:3000`**. Порт на хосте: `APP_HOST_PORT` (по умолчанию 3000), публикация **`0.0.0.0`** (все интерфейсы).
+- Внутри compose для приложения **`DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
+- Каталог **`config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
+- Логи: `docker compose logs -f app`
+- Остановка: `docker compose down`
+
+Образ собирается из [`Dockerfile`](Dockerfile) в корне репозитория.
+
+**Вариант B — только Postgres в Docker, приложение локально (`npm run start`)**
+
 ```bash
 npm install
-cp config/env.example .env   # при необходимости отредактируйте
-# Опционально: PostgreSQL для телеоператора
-docker compose up -d
+cp config/env.example .env
+docker compose up -d postgres   # только БД
+# в .env: DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
 npm run start                # продакшен
 npm run dev                  # nodemon
 ```
 
-Сервер слушает `HOST` / `PORT` (по умолчанию `0.0.0.0:3000`).
+Сервер слушает **`HOST` / `PORT`**. По умолчанию **`HOST=0.0.0.0`** — это **не** «только localhost»: процесс принимает соединения на **всех сетевых интерфейсах** машины, и с другого компьютера нужно открывать **`http://<публичный-IP-или-DNS-сервера>:3000`** (порт см. `PORT` / `APP_HOST_PORT` в Docker). Примеры с `localhost` в документации — для проверки **с самого сервера**. Если задать **`HOST=127.0.0.1`**, по сети достучаться нельзя (в логе будет предупреждение).
 
-**PostgreSQL для телеоператора:** в репозитории есть [`docker-compose.yml`](docker-compose.yml) (пользователь `x402`, пароль `x402`, БД `x402raid`, порт хоста **5434**). Пример `DATABASE_URL`: `postgres://x402:x402@localhost:5434/x402raid`. Схема таблицы `teleoperators` создаётся при старте приложения (`CREATE TABLE IF NOT EXISTS`).
+**PostgreSQL (compose):** порт **5434** проброшен на **`127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схема `teleoperators` создаётся при старте приложения.
+
+**Вариант C — systemd без Docker (пример юнита)**  
+Шаблон: [`deploy/x402-raid-app.service.example`](deploy/x402-raid-app.service.example) — скопируйте в `/etc/systemd/system/`, поправьте пути и `User=`, затем `sudo systemctl enable --now x402-raid-app`.
 
 ## Интерфейсы
 
