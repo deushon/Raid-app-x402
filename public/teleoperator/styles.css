@@ -1,0 +1,50 @@
+/* Load /client/styles.css from HTML first; this file adds teleoperator-only rules. */
+
+.vr-stub {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  color: #38bdf8;
+}
+
+.hint {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 420px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.auth-form input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.form-error {
+  color: #f87171;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.auth-links {
+  margin-top: 1rem;
+  color: #94a3b8;
+}
+
+.auth-links a {
+  color: #38bdf8;
+}

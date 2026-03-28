@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Регистрация телеоператора</title>
+    <link rel="stylesheet" href="/client/styles.css" />
+    <link rel="stylesheet" href="/teleoperator/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Регистрация</h1>
+      <p>Логин, пароль и публичный ключ кошелька Solana</p>
+    </header>
+    <main>
+      <section class="panel">
+        <form id="register-form" class="auth-form">
+          <label>
+            Логин
+            <input name="login" type="text" required autocomplete="username" minlength="2" maxlength="64" />
+          </label>
+          <label>
+            Пароль
+            <input name="password" type="password" required autocomplete="new-password" minlength="8" />
+          </label>
+          <label>
+            Публичный ключ кошелька (Solana)
+            <input name="walletPublicKey" type="text" required placeholder="Base58 address" />
+          </label>
+          <p id="form-error" class="form-error hidden"></p>
+          <button type="submit" class="btn-primary">Зарегистрироваться</button>
+        </form>
+        <p class="auth-links">Уже есть аккаунт? <a href="/teleoperator/login.html">Вход</a></p>
+      </section>
+    </main>
+    <script src="/teleoperator/register.js"></script>
+  </body>
+</html>

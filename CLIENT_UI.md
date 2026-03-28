@@ -8,6 +8,7 @@ Public interface for external users with Solana wallet payments and two operatio
 
 - **Public UI**: `http://localhost:3000/client`
 - **Admin panel** (auth required): `http://localhost:3000/ui`
+- **Teleoperator** (registration / login; requires `DATABASE_URL` on the server): `http://localhost:3000/teleoperator`
 
 ## Modes
 

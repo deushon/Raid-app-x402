@@ -127,6 +127,17 @@ const loadConfig = (argv = []) => {
       defaultHealthEndpoint: args['robot-health-endpoint'] || process.env.ROBOT_HEALTH_ENDPOINT || '/health',
       defaultSecureHealthEndpoint: args['robot-secure-health-endpoint'] || process.env.ROBOT_SECURE_HEALTH_ENDPOINT || '/helth',
     },
+    database: {
+      url: process.env.DATABASE_URL || null,
+    },
+    teleoperator: {
+      jwtSecret:
+        process.env.TELEOPERATOR_JWT_SECRET
+        || (process.env.NODE_ENV === 'production' ? null : 'dev-teleoperator-jwt-secret-change-me'),
+      jwtExpiresIn: process.env.TELEOPERATOR_JWT_EXPIRES_IN || '7d',
+      cookieName: 'teleop_token',
+      bcryptRounds: toNumber(process.env.TELEOPERATOR_BCRYPT_ROUNDS, 10),
+    },
   };
 };
 

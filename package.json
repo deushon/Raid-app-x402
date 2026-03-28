@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./src/index.js",
     "dev": "nodemon ./src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js"
   },
   "keywords": [
     "x402",
@@ -20,15 +20,20 @@
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
     "bs58": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.14.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.0"
   }
 }

@@ -1,0 +1,13 @@
+# Local PostgreSQL for teleoperator accounts (optional).
+# Start: docker compose up -d
+# Host port 5434 -> container 5432 (5432/5433 often taken by other stacks).
+# Then set DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid in .env
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: x402
+      POSTGRES_PASSWORD: x402
+      POSTGRES_DB: x402raid
+    ports:
+      - "5434:5432"

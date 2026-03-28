@@ -15,6 +15,7 @@ const swaggerDefinition = {
     { name: 'Robots', description: 'Robot registration, status, and lifecycle operations.' },
     { name: 'Commands', description: 'High-level actions dispatched to robots.' },
     { name: 'Payments', description: 'x402 payment verification and callbacks.' },
+    { name: 'Teleoperator', description: 'Teleoperator registration, login, and session (JWT cookie).' },
   ],
   servers: [
     {
@@ -23,6 +24,14 @@ const swaggerDefinition = {
     },
   ],
   components: {
+    securitySchemes: {
+      TeleoperatorCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'teleop_token',
+        description: 'JWT set by POST /api/teleoperator/login or register.',
+      },
+    },
     schemas: {
       RobotHealthStatus: {
         type: 'object',
@@ -115,6 +124,39 @@ const swaggerDefinition = {
             },
           },
           quantity: { type: 'integer', example: 3 },
+        },
+      },
+      TeleoperatorRegisterRequest: {
+        type: 'object',
+        required: ['login', 'password', 'walletPublicKey'],
+        properties: {
+          login: { type: 'string', example: 'operator1' },
+          password: { type: 'string', format: 'password', minLength: 8 },
+          walletPublicKey: { type: 'string', description: 'Solana address (base58)' },
+        },
+      },
+      TeleoperatorLoginRequest: {
+        type: 'object',
+        required: ['login', 'password'],
+        properties: {
+          login: { type: 'string' },
+          password: { type: 'string', format: 'password' },
+        },
+      },
+      TeleoperatorPublicProfile: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          login: { type: 'string' },
+          walletPublicKey: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      TeleoperatorAuthResponse: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean', example: true },
+          user: { $ref: '#/components/schemas/TeleoperatorPublicProfile' },
         },
       },
     },

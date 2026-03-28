@@ -45,7 +45,11 @@
 | [src/routes/commands.js](src/routes/commands.js) | `dance`, `buy-cola`                                                              |
 | [src/routes/client.js](src/routes/client.js)     | Публичный клиентский API: настройки, estimate, invoice, execute                  |
 | [src/routes/admin.js](src/routes/admin.js)       | Админ API (Basic Auth): конфиг AI, RPC клиента                                   |
+| [src/routes/teleoperator.js](src/routes/teleoperator.js) | API телеоператора: регистрация, вход, сессия JWT (cookie)                 |
 | [src/middleware/auth.js](src/middleware/auth.js) | Basic Auth для `/ui` и `/api/admin`                                              |
+| [src/middleware/teleopSession.js](src/middleware/teleopSession.js) | JWT/cookie сессия телеоператора                              |
+| [src/db/ensureTeleoperatorSchema.js](src/db/ensureTeleoperatorSchema.js) | DDL таблицы `teleoperators` (PostgreSQL)                         |
+| [src/services/teleoperatorRepository.js](src/services/teleoperatorRepository.js) | Пользователи телеоператора в БД (bcrypt, Solana pubkey)   |
 | [src/docs/swagger.js](src/docs/swagger.js)       | База OpenAPI и общие схемы для JSDoc                                             |
 | [src/services/](src/services/)                   | Реестр, health, команды, x402, платежи, выбор исполнителя, настройки             |
 

@@ -12,6 +12,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **Режим RAID для клиента**: выбор робота через **AIAgentService** (стратегии или webhook **n8n**), настраивается в админке.
 - **ClientPaymentService**: проверка Solana-транзакции и задел под refund при сбое выполнения.
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (см. `src/docs/swagger.js` и JSDoc `@openapi` в роутерах).
+- **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token`. Личный кабинет `/teleoperator/cabinet` (заглушка для VR). В будущем можно добавить оффчейн-вход по подписи кошелька.
 
 ## Быстрый старт
 
@@ -20,17 +21,22 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - Node.js 18+
 - npm 9+
 - Для защищённых роботов и серверных оплат: `X402_PRIVATE_KEY` (и при необходимости ключ для Solana).
+- Для телеоператора: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*` и UI `/teleoperator` **не подключаются**.
 
 ### Установка и запуск
 
 ```bash
 npm install
 cp config/env.example .env   # при необходимости отредактируйте
+# Опционально: PostgreSQL для телеоператора
+docker compose up -d
 npm run start                # продакшен
 npm run dev                  # nodemon
 ```
 
 Сервер слушает `HOST` / `PORT` (по умолчанию `0.0.0.0:3000`).
+
+**PostgreSQL для телеоператора:** в репозитории есть [`docker-compose.yml`](docker-compose.yml) (пользователь `x402`, пароль `x402`, БД `x402raid`, порт хоста **5434**). Пример `DATABASE_URL`: `postgres://x402:x402@localhost:5434/x402raid`. Схема таблицы `teleoperators` создаётся при старте приложения (`CREATE TABLE IF NOT EXISTS`).
 
 ## Интерфейсы
 
@@ -41,6 +47,8 @@ npm run dev                  # nodemon
 | `/ui` | Админка (статический UI): регистрация роботов, команды, карта — **требуется Basic Auth** (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
 | `/docs` | Swagger UI |
 | `/docs-json` | Спецификация OpenAPI (JSON) |
+| `/teleoperator` | UI телеоператора: регистрация, вход (только если задан `DATABASE_URL`) |
+| `/teleoperator/cabinet` | Личный кабинет (нужна сессия; иначе редирект на логин). HTML отдаётся только с сервера, не из публичной статики |
 
 ## Конфигурация
 
@@ -60,6 +68,15 @@ npm run dev                  # nodemon
 | `ADMIN_PASSWORD` | Пароль (**смените в проде**) | `admin` |
 
 Защищённые префиксы: статика `/ui` и API `/api/admin/*`.
+
+### Телеоператор и база данных
+
+| Переменная | Описание |
+| --- | --- |
+| `DATABASE_URL` | URI подключения PostgreSQL. Без неё телеоператор отключён. |
+| `TELEOPERATOR_JWT_SECRET` | Секрет подписи JWT (**обязателен**, если задан `DATABASE_URL`). В dev при отсутствии env используется небезопасный дефолт (см. `src/config.js`); в `NODE_ENV=production` без секрета процесс не стартует. |
+| `TELEOPERATOR_JWT_EXPIRES_IN` | Срок JWT (например `7d`, `24h`). По умолчанию `7d`. |
+| `TELEOPERATOR_BCRYPT_ROUNDS` | Стоимость bcrypt (по умолчанию `10`). |
 
 ## API (кратко)
 
@@ -98,6 +115,15 @@ npm run dev                  # nodemon
 | `GET` / `POST` | `/api/admin/ai-agent` | Чтение / сохранение конфига AI (Basic Auth) |
 | `GET` / `POST` | `/api/admin/client-settings` | Просмотр / сохранение RPC с админки (Basic Auth) |
 
+### Телеоператор (без Basic Auth; сессия по cookie `teleop_token`)
+
+| Метод | Путь | Описание |
+| --- | --- | --- |
+| `POST` | `/api/teleoperator/register` | Тело: `login`, `password`, `walletPublicKey` (Solana). Ответ 201, выставляется cookie. |
+| `POST` | `/api/teleoperator/login` | `login`, `password`; cookie. |
+| `POST` | `/api/teleoperator/logout` | Сброс cookie. |
+| `GET` | `/api/teleoperator/me` | Профиль текущего пользователя (нужна валидная сессия). |
+
 Полная схема запросов/ответов — в **Swagger** (`/docs`). Детали протокола x402 в приложении — [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
 ## Ожидания от роботов
@@ -113,7 +139,15 @@ npm run dev                  # nodemon
 ```bash
 npm run start
 npm run dev
-npm test          # см. package.json; тесты должны добавляться вместе с кодом
+npm test
+```
+
+Тесты телеоператора и репозитория требуют **`TEST_DATABASE_URL`** (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
+
+```bash
+export TEST_DATABASE_URL=postgres://x402:x402@127.0.0.1:5434/x402raid
+docker compose up -d
+npm test
 ```
 
 ## Расширение

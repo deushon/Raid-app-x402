@@ -1,6 +1,8 @@
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const { Pool } = require('pg');
 const { loadConfig } = require('./config');
 const logger = require('./utils/logger');
 const X402Service = require('./services/x402Service');
@@ -11,14 +13,36 @@ const createRobotsRouter = require('./routes/robots');
 const createCommandsRouter = require('./routes/commands');
 const createClientRouter = require('./routes/client');
 const createAdminRouter = require('./routes/admin');
+const createTeleoperatorRouter = require('./routes/teleoperator');
 const createX402PaymentMiddleware = require('./middleware/x402Payment');
 const createAuthMiddleware = require('./middleware/auth');
+const { createAttachTeleopUser } = require('./middleware/teleopSession');
+const { ensureTeleoperatorSchema } = require('./db/ensureTeleoperatorSchema');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
 
-const bootstrap = () => {
+const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
   const { server } = config;
+
+  if (config.database.url && !config.teleoperator.jwtSecret) {
+    logger.error('TELEOPERATOR_JWT_SECRET is required when DATABASE_URL is set');
+    process.exit(1);
+  }
+
+  let pool = null;
+  if (config.database.url) {
+    pool = new Pool({ connectionString: config.database.url });
+    try {
+      await ensureTeleoperatorSchema(pool);
+    } catch (error) {
+      logger.error('Failed to ensure teleoperator schema', { error: error.message });
+      await pool.end().catch(() => {});
+      process.exit(1);
+    }
+  } else {
+    logger.warn('DATABASE_URL is not set; teleoperator API and /teleoperator UI are disabled.');
+  }
 
   settingsStore.init(config);
 
@@ -29,18 +53,49 @@ const bootstrap = () => {
 
   const app = express();
   app.use(cors());
+  app.use(cookieParser());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
   // Admin panel (auth required)
   app.use('/ui', createAuthMiddleware(), express.static(path.join(__dirname, '..', 'public')));
-  
+
   // Public client UI
   app.use('/client', express.static(path.join(__dirname, '..', 'public', 'client')));
   app.get('/client', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'client', 'index.html'));
   });
-  
+
+  if (pool) {
+    const attachTeleopUser = createAttachTeleopUser(config.teleoperator);
+    const teleoperatorPublicRoot = path.join(__dirname, '..', 'public', 'teleoperator');
+    const teleoperatorCabinetFile = path.join(__dirname, '..', 'private', 'teleoperator', 'cabinet.html');
+
+    app.get(
+      '/teleoperator/cabinet',
+      attachTeleopUser,
+      (req, res, next) => {
+        if (req.teleopUser?.id) {
+          return next();
+        }
+        const nextParam = encodeURIComponent(req.originalUrl || '/teleoperator/cabinet');
+        return res.redirect(302, `/teleoperator/login.html?next=${nextParam}`);
+      },
+      (req, res) => {
+        res.sendFile(teleoperatorCabinetFile);
+      },
+    );
+
+    app.get('/teleoperator', (req, res) => {
+      res.sendFile(path.join(teleoperatorPublicRoot, 'index.html'));
+    });
+    app.get('/teleoperator/', (req, res) => {
+      res.redirect(302, '/teleoperator');
+    });
+    app.use('/teleoperator', express.static(teleoperatorPublicRoot));
+    app.use('/api/teleoperator', createTeleoperatorRouter({ pool, config }));
+  }
+
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
   app.get('/docs-json', (req, res) => {
     res.json(swaggerSpec);
@@ -156,6 +211,7 @@ const bootstrap = () => {
       host: server.host,
       port: server.port,
       x402Configured: x402Service.isConfigured(),
+      teleoperatorEnabled: Boolean(pool),
     });
   });
 
@@ -163,8 +219,10 @@ const bootstrap = () => {
 };
 
 if (require.main === module) {
-  bootstrap();
+  bootstrap().catch((error) => {
+    logger.error('Server failed to start', { error: error.message, stack: error.stack });
+    process.exit(1);
+  });
 }
 
 module.exports = { bootstrap };
-
