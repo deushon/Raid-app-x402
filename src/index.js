@@ -31,6 +31,7 @@ const { ensureTeleoperatorRobotGrantsSchema } = require('./db/ensureTeleoperator
 const { createRobotRepository } = require('./services/robotRepository');
 const { createTeleoperatorRobotGrantRepository } = require('./services/teleoperatorRobotGrantRepository');
 const createTeleopHelpRouter = require('./routes/teleopHelp');
+const { createTeleopDatasetProxyMiddleware } = require('./services/teleopDatasetProxy');
 const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
 const { attachTeleopWebSockets } = require('./ws/teleopServer');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
@@ -92,6 +93,9 @@ const bootstrap = async () => {
   const teleopHub = pool ? createTeleopOperatorHub() : null;
   const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
 
+  const attachTeleopUser = pool ? createAttachTeleopUser(config.teleoperator) : null;
+  const requireTeleopSessionJson = pool ? createRequireTeleopSession({ mode: 'json' }) : null;
+
   const app = express();
   if (config.server.trustProxy) {
     app.set('trust proxy', config.server.trustProxy);
@@ -111,6 +115,20 @@ const bootstrap = async () => {
     }),
   );
   app.use(cookieParser());
+
+  if (pool && attachTeleopUser && requireTeleopSessionJson) {
+    app.use(
+      '/api/teleop',
+      attachTeleopUser,
+      requireTeleopSessionJson,
+      createTeleopDatasetProxyMiddleware({
+        registry,
+        grantRepository,
+        timeoutMs: config.teleop.datasetProxyTimeoutMs,
+      }),
+    );
+  }
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -130,7 +148,6 @@ const bootstrap = async () => {
   });
 
   if (pool) {
-    const attachTeleopUser = createAttachTeleopUser(config.teleoperator);
     const teleoperatorPublicRoot = path.join(__dirname, '..', 'public', 'teleoperator');
     const teleoperatorCabinetFile = path.join(__dirname, '..', 'private', 'teleoperator', 'cabinet.html');
 
@@ -165,7 +182,7 @@ const bootstrap = async () => {
         registry,
         teleopHub,
         attachTeleopUser,
-        requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
+        requireTeleopSession: requireTeleopSessionJson,
         grantRepository,
       }),
     );

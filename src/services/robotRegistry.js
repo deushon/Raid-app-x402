@@ -62,6 +62,8 @@ class RobotRegistry {
     teleopSecret,
     enrollmentKey,
     operatorRegistryUrl,
+    datasetHttpHost,
+    datasetHttpPort,
   }) {
     const id = uuid();
     const ek =
@@ -71,6 +73,14 @@ class RobotRegistry {
     const oru =
       operatorRegistryUrl != null && String(operatorRegistryUrl).trim() !== ''
         ? String(operatorRegistryUrl).trim()
+        : null;
+    const dHost =
+      datasetHttpHost != null && String(datasetHttpHost).trim() !== ''
+        ? String(datasetHttpHost).trim()
+        : null;
+    const dPort =
+      datasetHttpPort != null && !Number.isNaN(Number(datasetHttpPort))
+        ? Number(datasetHttpPort)
         : null;
     const robot = {
       id,
@@ -83,6 +93,8 @@ class RobotRegistry {
       teleopSecret: teleopSecret != null && teleopSecret !== '' ? String(teleopSecret) : null,
       enrollmentKey: ek,
       operatorRegistryUrl: oru,
+      datasetHttpHost: dHost,
+      datasetHttpPort: dPort,
       status: {
         state: 'unknown',
         message: 'Awaiting first health check',
@@ -177,6 +189,20 @@ class RobotRegistry {
     if (next.operatorRegistryUrl === '') {
       next.operatorRegistryUrl = null;
     }
+    if (next.datasetHttpHost !== undefined) {
+      next.datasetHttpHost =
+        next.datasetHttpHost != null && String(next.datasetHttpHost).trim() !== ''
+          ? String(next.datasetHttpHost).trim()
+          : null;
+    }
+    if (next.datasetHttpPort !== undefined) {
+      if (next.datasetHttpPort === null || next.datasetHttpPort === '') {
+        next.datasetHttpPort = null;
+      } else {
+        const n = Number(next.datasetHttpPort);
+        next.datasetHttpPort = Number.isNaN(n) ? null : n;
+      }
+    }
 
     const merged = {
       ...robot,
@@ -238,7 +264,7 @@ class RobotRegistry {
           p.teleopSecret != null && String(p.teleopSecret).trim() !== ''
             ? String(p.teleopSecret).trim()
             : cur.teleopSecret;
-        return this.updateRobot(existingId, {
+        const patch = {
           name: p.name != null && String(p.name).trim() !== '' ? String(p.name).trim() : cur.name,
           host: p.host,
           port: p.port,
@@ -252,7 +278,22 @@ class RobotRegistry {
           enrollmentKey: key,
           operatorRegistryUrl:
             p.operatorRegistryUrl !== undefined ? p.operatorRegistryUrl : cur.operatorRegistryUrl,
-        });
+        };
+        if (p.datasetHttpHost !== undefined) {
+          patch.datasetHttpHost =
+            p.datasetHttpHost != null && String(p.datasetHttpHost).trim() !== ''
+              ? String(p.datasetHttpHost).trim()
+              : null;
+        }
+        if (p.datasetHttpPort !== undefined) {
+          if (p.datasetHttpPort === null || p.datasetHttpPort === '') {
+            patch.datasetHttpPort = null;
+          } else {
+            const n = Number(p.datasetHttpPort);
+            patch.datasetHttpPort = Number.isNaN(n) ? null : n;
+          }
+        }
+        return this.updateRobot(existingId, patch);
       }
     }
     const autoSecret =
@@ -273,6 +314,8 @@ class RobotRegistry {
       teleopSecret: autoSecret,
       enrollmentKey: key,
       operatorRegistryUrl: oru,
+      datasetHttpHost: p.datasetHttpHost,
+      datasetHttpPort: p.datasetHttpPort,
     });
   }
 }

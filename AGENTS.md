@@ -47,6 +47,8 @@
 | [src/routes/admin.js](src/routes/admin.js)       | Админ API: login/session, конфиг AI, RPC клиента (cookie или Basic)              |
 | [src/routes/teleoperator.js](src/routes/teleoperator.js) | API телеоператора: регистрация, вход, сессия JWT (cookie)                 |
 | [src/routes/teleopHelp.js](src/routes/teleopHelp.js) | Заявки помощи от робота, accept, broadcast в WS hub                        |
+| [src/routes/teleopDataset.js](src/routes/teleopDataset.js) | OpenAPI для прокси датасета **`/api/teleop/robots/:id/dataset/*`** (логика в `teleopDatasetProxy`) |
+| [src/services/teleopDatasetProxy.js](src/services/teleopDatasetProxy.js) | HTTP reverse proxy оператор JWT → датасет на роботе (stream, grants)       |
 | [src/ws/teleopServer.js](src/ws/teleopServer.js) | Upgrade: `/ws/teleoperator`, `/ws/teleop/session/:id` → duplex к rosbridge   |
 | [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | PostgreSQL: `help_requests`, `teleop_sessions`                    |
 | [src/services/teleopOperatorHub.js](src/services/teleopOperatorHub.js) | Рассылка JSON событий подключённым телеоператорам                    |

@@ -22,6 +22,10 @@ async function ensureRobotSchema(pool) {
   // Add columns before any index on them (legacy DBs had robots without enrollment_key).
   await pool.query(`ALTER TABLE robots ADD COLUMN IF NOT EXISTS enrollment_key TEXT;`);
   await pool.query(`ALTER TABLE robots ADD COLUMN IF NOT EXISTS operator_registry_url TEXT;`);
+  await pool.query(`ALTER TABLE robots ADD COLUMN IF NOT EXISTS dataset_http_host TEXT;`);
+  await pool.query(
+    `ALTER TABLE robots ADD COLUMN IF NOT EXISTS dataset_http_port INTEGER;`,
+  );
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS robots_enrollment_key_unique
     ON robots (enrollment_key) WHERE enrollment_key IS NOT NULL AND enrollment_key <> '';

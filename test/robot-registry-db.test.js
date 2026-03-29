@@ -75,13 +75,21 @@ run('robot registry PostgreSQL', () => {
     const reg = new RobotRegistry({ healthMonitor, robotRepository: repo });
     await reg.loadFromPersistence();
     const r = await reg.addRobot({ name: 'u1', host: '1.1.1.1', port: 1 });
-    await reg.updateRobot(r.id, { name: 'u2', host: '2.2.2.2', port: 2 });
+    await reg.updateRobot(r.id, {
+      name: 'u2',
+      host: '2.2.2.2',
+      port: 2,
+      datasetHttpHost: 'dataset.internal',
+      datasetHttpPort: 9192,
+    });
     const reg2 = new RobotRegistry({ healthMonitor, robotRepository: repo });
     await reg2.loadFromPersistence();
     const loaded = reg2.getById(r.id);
     assert.equal(loaded.name, 'u2');
     assert.equal(loaded.host, '2.2.2.2');
     assert.equal(loaded.port, 2);
+    assert.equal(loaded.datasetHttpHost, 'dataset.internal');
+    assert.equal(loaded.datasetHttpPort, 9192);
     await reg2.removeRobot(r.id);
   });
 
@@ -138,9 +146,9 @@ run('robot registry PostgreSQL', () => {
     const cols = await pool.query(
       `SELECT column_name FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'robots'
-       AND column_name IN ('enrollment_key', 'operator_registry_url')`,
+       AND column_name IN ('enrollment_key', 'operator_registry_url', 'dataset_http_host', 'dataset_http_port')`,
     );
-    assert.equal(cols.rows.length, 2);
+    assert.equal(cols.rows.length, 4);
     await ensureRobotSchema(pool);
     await ensureTeleoperatorRobotGrantsSchema(pool);
     await pool.query('DELETE FROM robots');

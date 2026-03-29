@@ -14,6 +14,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (см. `src/docs/swagger.js` и JSDoc `@openapi` в роутерах).
 - **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token` и поле **`accessToken`** в JSON (для WebSocket и нативных клиентов). Личный кабинет `/teleoperator/cabinet`: открытые заявки «помощь», приём, **WebSocket URL** для прокси ROSBridge (см. ниже).
 - **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). В это подключение по умолчанию добавляются **идентификатор телеоператора**: заголовки **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** (отключаются env **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; событие **`help_request`** по **`/ws/teleoperator?token=JWT`** и строки в **`GET /api/teleoperator/help-requests`** получают **все** подключённые операторы только если у робота **нет** активных выдач в **`teleoperator_robot_grants`**. Если выдачи есть — уведомления и список заявок по этому роботу видят **только** операторы с grant (таблица **`teleoperator_robot_grants`**, UI **`/ui/teleop-access.html`**); принять заявку может тот же набор.
+- **Прокси HTTP датасета (оператор → робот)**: при **`DATABASE_URL`** доступен префикс **`/api/teleop/robots/{robotId}/dataset/...`** — тот же JWT телеоператора и **те же правила grant**, что и для приёма заявки помощи. Запросы **stream**-ятся на HTTP датасета робота (по умолчанию **`host:9191`**, либо поля реестра **`datasetHttpHost`** / **`datasetHttpPort`**). Подробнее: [docs/RAID_APP_DATASET_PROXY_SPEC.md](docs/RAID_APP_DATASET_PROXY_SPEC.md).
 - **Флот и mDNS**: **`ROBOT_FLEET_ENROLLMENT_SECRET`** для **`POST /api/robots/enroll`** (стабильный **`enrollmentKey`** на роботе); опционально **`MDNS_ENABLED`** / **`MDNS_HOSTNAME`** — сервис объявляется в LAN как **`<hostname>.local`** (см. `config/env.example`). Push allowlist на робот: **`RAID_TO_ROBOT_SECRET`** и [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md).
 
 ## Быстрый старт
@@ -23,7 +24,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - Node.js 18+
 - npm 9+
 - Для защищённых роботов и серверных оплат: `X402_PRIVATE_KEY` (и при необходимости ключ для Solana).
-- Для телеоператора, **персистентного реестра роботов**, **телеоп-прокси**: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*`, **`/api/.../teleop/help`**, UI `/teleoperator` и WebSocket телеопа **не подключаются**, а роботы **не сохраняются** между перезапусками приложения.
+- Для телеоператора, **персистентного реестра роботов**, **телеоп-прокси** и **HTTP-прокси датасета** (`/api/teleop/...`): **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*`, **`/api/.../teleop/help`**, **`/api/teleop/*`**, UI `/teleoperator` и WebSocket телеопа **не подключаются**, а роботы **не сохраняются** между перезапусками приложения.
 
 ### Установка и запуск
 
@@ -39,6 +40,8 @@ docker compose up -d --build
 - Внутри compose для приложения `**DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
 - Каталог `**config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
 - Данные **PostgreSQL** лежат в именованном томе **`x402_raid_pgdata`** (роботы, телеоператоры, заявки помощи переживают пересборку контейнеров). **Не используйте** `docker compose down -v`, если нужно сохранить пользователей и роботов — флаг **`-v` удалит том и все данные**. Обычная остановка: `docker compose down` без **`-v`**.
+- **`docker compose up -d --build` и перезагрузка хоста сами по себе не очищают таблицы** — приложение при старте только создаёт/дополняет схему (`IF NOT EXISTS`), без `TRUNCATE`/`DROP` по боевым данным.
+- Если роботы и операторы «внезапно» пропали, чаще всего: (1) когда‑то запускали **`docker compose down -v`** или **`docker volume prune`**; (2) на этой же машине гоняли **`npm test`** с **`TEST_DATABASE_URL`**, указывающим на **тот же Postgres**, что проброшен на **`localhost:5434`** — тесты делают **`TRUNCATE … CASCADE`** по таблицам телеопа и роботов; (3) каталог с репозиторием **переименовали или склонировали в другую папку** — у Docker Compose другое имя проекта → **новый пустой том** (см. `docker volume ls | grep x402`). На сервере **не храните** `TEST_DATABASE_URL` в `.env` и не экспортируйте её в shell профиле, если с того же хоста поднимается compose Postgres.
 - Логи: `docker compose logs -f app`
 - Остановка: `docker compose down`
 
@@ -126,8 +129,9 @@ npm run dev                  # nodemon
 | `TELEOP_SESSION_END_GRACE_MS`         | После отключения оператора от `/ws/teleop/session/...` или после окончательного падения rosbridge: через столько **мс** закрыть строку в **`teleop_sessions`** (по умолчанию **120000**). Пока сессия в БД не закрыта, можно снова подключиться **с тем же `sessionId` и JWT**. **`0`** — закрывать сессию в БД сразу (старое поведение). |
 | `TELEOP_FORWARD_OPERATOR_HEADERS` | `true` / `false` (по умолчанию `true`; выключают также `0`, `false`, `no`, `off`). Исходящий WS **raid_app → rosbridge**: заголовки **`X-Teleoperator-Id`** и при наличии логина **`X-Teleoperator-Login`**. |
 | `TELEOP_FORWARD_OPERATOR_QUERY`   | `true` / `false` (по умолчанию `true`). К URL подключения к rosbridge добавляются query **`teleoperator_id`** и при наличии логина **`teleoperator_login`**. Если rosbridge/прокси ломается на `?…`, поставьте `false`. |
+| `TELEOP_DATASET_PROXY_TIMEOUT_MS` | Таймаут **исходящего** HTTP к датасету на роботе при прокси **`/api/teleop/robots/.../dataset/...`** (мс, по умолчанию **300000**). |
 
-Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js).
+Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js). Для HTTP-прокси датасета на робот дополнительно ставятся **`X-Forwarded-For`**, **`X-Forwarded-Proto`**, **`X-Teleoperator-Id`** (и при наличии **`X-Teleoperator-Login`**); см. [`src/services/teleopDatasetProxy.js`](src/services/teleopDatasetProxy.js).
 
 ### Роботы: секрет флота, mDNS, синхронизация allowlist
 
@@ -147,7 +151,7 @@ npm run dev                  # nodemon
 | ---------------- | -------------------------- | ---------------------------------------- |
 | `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`** |
 | `GET`            | `/api/robots`              | Публичный список роботов **без** `teleopSecret`. Персистентность как выше. |
-| `POST`           | `/api/robots/enroll`       | Саморегистрация флота: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` или **`X-Robot-Fleet-Secret`**), тело с **`enrollmentKey`** (стабильный id устройства), `host`, `port`, опционально `teleopSecret`, `operatorRegistryUrl`. Идемпотентный upsert; в ответе есть `teleopSecret`. Ожидаемые ошибки: **503** (секрет флота не настроен), **401** с упоминанием **fleet credential** (секрет не совпал). |
+| `POST`           | `/api/robots/enroll`       | Саморегистрация флота: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` или **`X-Robot-Fleet-Secret`**), тело с **`enrollmentKey`** (стабильный id устройства), `host`, `port`, опционально `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (для прокси датасета; порт по умолчанию на стороне Raid — **9191**, если не задан). Идемпотентный upsert; в ответе есть `teleopSecret`. Ожидаемые ошибки: **503** (секрет флота не настроен), **401** с упоминанием **fleet credential** (секрет не совпал). |
 | `POST`           | `/api/robots`              | Новая регистрация (новый UUID): тот же секрет флота **или** сессия админа. Полный ответ с `teleopSecret`. |
 | `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление — секрет флота **или** админ. |
 | `POST`           | `/api/robots/{id}/refresh` | Health-check — секрет флота **или** админ. |
@@ -203,6 +207,7 @@ npm run dev                  # nodemon
 | `POST` | `/api/robots/{id}/teleop/help` | Робот запрашивает помощь (LAN): **`X-Robot-Teleop-Secret`**, опционально `{ message, metadata }`. Повтор при уже открытой заявке → **200** и `duplicate: true`. |
 | `GET`  | `/api/teleoperator/help-requests` | Список открытых заявок (JWT).                                                          |
 | `POST` | `/api/teleoperator/help-requests/{id}/accept` | Принять заявку → **`session.id`**. Если у робота есть **хотя бы одна** активная выдача в **`teleoperator_robot_grants`**, принять может только выданный оператор; иначе — любой вошедший (как раньше). |
+| `*`    | `/api/teleop/robots/{robotId}/dataset/{path}` | **Прокси** на HTTP датасета робота (метод, путь после `dataset/` и query сохраняются). JWT телеоператора (**`Authorization: Bearer`** или cookie **`teleop_token`**). Те же **grants**, что для accept заявки. **502** / **504** при недоступности upstream. См. [docs/RAID_APP_DATASET_PROXY_SPEC.md](docs/RAID_APP_DATASET_PROXY_SPEC.md). |
 
 
 ### Teleop proxy — контракт для внешних клиентов (Unity / Quest / ROSBridge)
@@ -217,6 +222,7 @@ npm run dev                  # nodemon
    - После подключения передавайте **те же текстовые кадры JSON**, что при прямом ROSBridge WebSocket (например `op: subscribe`, `op: publish`).
 5. **Что видит робот при активной сессии:** с хоста `raid_app` к `ws://rosbridgeHost:rosbridgePort` уходит **второй** WebSocket (сервер → rosbridge). В нём по умолчанию передаются **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** — чтобы на стороне робота (nginx, обёртка, логирование) было известно, **какой оператор** ведёт сессию. Отключение: **`TELEOP_FORWARD_OPERATOR_HEADERS`**, **`TELEOP_FORWARD_OPERATOR_QUERY`**. Стандартный rosbridge эти поля может не интерпретировать.
 6. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. **Время жизни JWT оператора** задаётся **`TELEOPERATOR_JWT_EXPIRES_IN`** (например `7d`). **Строка сессии телеопа в БД** после обрыва WS остаётся активной на время **`TELEOP_SESSION_END_GRACE_MS`**, затем закрывается (можно снова открыть тот же URL с тем же `sessionId`, пока не истёк grace и JWT). Переподключение **raid_app → rosbridge** при кратковременных сбоях — см. **`TELEOP_ROSBRIDGE_*_ATTEMPTS`** и **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**. Код **1011** / причина **`Rosbridge error`** чаще всего означает, что с хоста Raid не удаётся устойчиво держать WS к **`rosbridgeHost:rosbridgePort`** (сеть, rosbridge не запущен, прокси режет заголовки/query — попробуйте **`TELEOP_FORWARD_OPERATOR_*`**).
+7. **Датасет по HTTP (Quest / веб без прямого доступа к LAN робота):** базовый URL **`https://<raid>/api/teleop/robots/<robotUuid>/dataset`** — далее те же пути, что на роботе (**`dataset_status`**, **`upload_dataset`**, **`dataset_download/...`**, …). Тот же JWT, что для help/WS; при ACL на роботе — только операторы с grant. Таймаут upstream: **`TELEOP_DATASET_PROXY_TIMEOUT_MS`**.
 
 HTTP-вызов с робота «запросить помощь» (без JWT оператора): [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md).
 
@@ -228,6 +234,7 @@ HTTP-вызов с робота «запросить помощь» (без JWT 
 - `POST /commands/dance`, `POST /commands/buy-cola` с телами согласно команде.
 - Для платных эндпоинтов — ответ **402** в формате V2 (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`).
 - Для телеопа: на роботе доступен **ROSBridge WebSocket** (часто порт **9090**) с той же LAN, откуда `raid_app` достучится до `rosbridgeHost` / `rosbridgePort`. Скрипт на роботе может вызывать **`POST /api/robots/{robotId}/teleop/help`** с секретом, заданным при регистрации робота в админке (подробнее: [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md)). После принятия заявки оператором на исходящем соединении к rosbridge пробрасываются **id/login оператора** (см. таблицу `TELEOP_FORWARD_*` выше) — при необходимости обработайте их в прокси на роботе.
+- Для выгрузки датасета с операторского клиента: с той же LAN `raid_app` должен открывать TCP к **`datasetHttpHost` / `datasetHttpPort`** (по умолчанию **`host`** и **9191**). Оператор ходит только на Raid (**`/api/teleop/robots/{id}/dataset/...`**), не на робот напрямую из интернета.
 
 Пример объекта в `availableMethods` см. в предыдущих версиях README или в `swagger.js` (`RobotHealthStatus`).
 
@@ -239,11 +246,17 @@ npm run dev
 npm test
 ```
 
-Тесты телеоператора, **teleop help** и репозитория требуют `**TEST_DATABASE_URL**` (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
+Приложение на хосте с Postgres только из compose (порт **5434** на localhost) использует в `.env`:
 
 ```bash
-export TEST_DATABASE_URL=postgres://x402:x402@127.0.0.1:5434/x402raid
-docker compose up -d
+DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
+```
+
+Тесты **не читают** `DATABASE_URL`: интеграционные наборы смотрят только на **`TEST_DATABASE_URL`**. Если она не задана, эти тесты пропускаются и `npm test` всё равно успешен. Пример той же БД, что и в `config/env.example` (не подставляйте сюда продакшен-БД — тесты делают **`TRUNCATE`**):
+
+```bash
+export TEST_DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
+docker compose up -d postgres   # или полный stack
 npm test
 ```
 

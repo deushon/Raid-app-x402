@@ -82,6 +82,8 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
         rosbridgePort,
         teleopSecret,
         operatorRegistryUrl,
+        datasetHttpHost,
+        datasetHttpPort,
       } = req.body || {};
       if (!host || port == null) {
         return res.status(400).json({ error: 'host and port are required' });
@@ -96,6 +98,8 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
         rosbridgePort,
         teleopSecret,
         operatorRegistryUrl,
+        datasetHttpHost,
+        datasetHttpPort,
       });
       try {
         await registry.refreshRobot(robot.id);
@@ -150,6 +154,8 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
         teleopSecret,
         enrollmentKey,
         operatorRegistryUrl,
+        datasetHttpHost,
+        datasetHttpPort,
       } = req.body || {};
       if (!host || !port) {
         return res.status(400).json({ error: 'Host and port are required' });
@@ -164,6 +170,8 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
         teleopSecret,
         enrollmentKey,
         operatorRegistryUrl,
+        datasetHttpHost,
+        datasetHttpPort,
       });
       return res.status(201).json(robot);
     } catch (error) {

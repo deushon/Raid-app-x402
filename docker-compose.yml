@@ -7,6 +7,8 @@
 # Остальное из .env (ключи Solana, TELEOPERATOR_JWT_SECRET, ADMIN_*, и т.д.).
 # Персистентные JSON в config/ монтируются в контейнер.
 
+# Имя тома на хосте: <имя_проекта_compose>_x402_raid_pgdata (имя проекта по умолчанию — имя каталога с compose-файлом).
+# Сохранность данных: не docker compose down -v; не docker volume prune без проверки; см. README.
 volumes:
   x402_raid_pgdata:
 

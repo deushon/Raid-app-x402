@@ -23,7 +23,7 @@ const swaggerDefinition = {
     {
       name: 'Teleop',
       description:
-        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
     },
     { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
     {
@@ -142,6 +142,17 @@ const swaggerDefinition = {
             nullable: true,
             description: 'Optional full URL on the robot for allowlist sync (see docs/ROBOT_OPERATOR_SYNC.md).',
           },
+          datasetHttpHost: {
+            type: 'string',
+            nullable: true,
+            description:
+              'Optional LAN host for dataset HTTP (default: same as host). Used by GET/POST /api/teleop/robots/{id}/dataset/... proxy.',
+          },
+          datasetHttpPort: {
+            type: 'integer',
+            nullable: true,
+            description: 'Optional dataset HTTP port (default 9191).',
+          },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
           location: {
@@ -168,6 +179,8 @@ const swaggerDefinition = {
           rosbridgePort: { type: 'integer' },
           enrollmentKey: { type: 'string', nullable: true },
           operatorRegistryUrl: { type: 'string', nullable: true },
+          datasetHttpHost: { type: 'string', nullable: true },
+          datasetHttpPort: { type: 'integer', nullable: true },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
           location: { type: 'object', nullable: true },
@@ -195,6 +208,14 @@ const swaggerDefinition = {
             type: 'string',
             description: 'Optional allowlist endpoint URL on the robot.',
           },
+          datasetHttpHost: {
+            type: 'string',
+            description: 'Optional; overrides host for operator dataset HTTP proxy.',
+          },
+          datasetHttpPort: {
+            type: 'integer',
+            description: 'Optional; default 9191 for dataset proxy upstream.',
+          },
         },
       },
       RegisterRobotRequest: {
@@ -212,6 +233,8 @@ const swaggerDefinition = {
             description: 'Shared secret for POST /api/robots/{id}/teleop/help.',
           },
           enrollmentKey: { type: 'string', description: 'Optional stable key (prefer POST /api/robots/enroll for upsert).' },
+          datasetHttpHost: { type: 'string', description: 'Optional dataset HTTP host for teleop proxy.' },
+          datasetHttpPort: { type: 'integer', description: 'Optional dataset HTTP port (default 9191).' },
           operatorRegistryUrl: { type: 'string', description: 'Optional; see docs/ROBOT_OPERATOR_SYNC.md' },
         },
       },

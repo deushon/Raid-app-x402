@@ -175,6 +175,8 @@ const createAdminRouter = ({
           teleopSecret,
           enrollmentKey,
           operatorRegistryUrl,
+          datasetHttpHost,
+          datasetHttpPort,
         } = req.body || {};
         if (!host || !port) {
           return res.status(400).json({ error: 'Host and port are required' });
@@ -189,6 +191,8 @@ const createAdminRouter = ({
           teleopSecret,
           enrollmentKey,
           operatorRegistryUrl,
+          datasetHttpHost,
+          datasetHttpPort,
         });
         return res.status(201).json(robot);
       } catch (error) {

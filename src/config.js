@@ -249,6 +249,11 @@ const loadConfig = (argv = []) => {
       /** Исходящий WS к rosbridge: передать id/login телеоператора (заголовки и/или query). */
       forwardOperatorHeaders: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_HEADERS, true),
       forwardOperatorQuery: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_QUERY, true),
+      /** HTTP reverse proxy to robot dataset API (operator JWT); upstream connect + body (ms). */
+      datasetProxyTimeoutMs: toNumber(
+        process.env.TELEOP_DATASET_PROXY_TIMEOUT_MS,
+        300000,
+      ),
     },
     admin: {
       username: (() => {
