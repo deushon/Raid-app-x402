@@ -11,6 +11,30 @@ function jwtExpiresToMs(expiresIn) {
   return n * (mult[unit] || mult.d);
 }
 
+function resolveCookieSecure(req, teleoperatorConfig) {
+  const mode = teleoperatorConfig.cookieSecureMode || 'auto';
+  if (mode === 'always') {
+    return true;
+  }
+  if (mode === 'never') {
+    return false;
+  }
+  if (!req) {
+    return false;
+  }
+  const forwarded = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  return Boolean(req.secure || forwarded === 'https');
+}
+
+function cookieBaseOptions(req, teleoperatorConfig) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: resolveCookieSecure(req, teleoperatorConfig),
+    path: '/',
+  };
+}
+
 function readTokenFromRequest(req, cookieName) {
   if (req.cookies && req.cookies[cookieName]) {
     return req.cookies[cookieName];
@@ -70,24 +94,16 @@ function signTeleopToken(user, teleoperatorConfig) {
   );
 }
 
-function setTeleopCookie(res, token, teleoperatorConfig) {
+function setTeleopCookie(req, res, token, teleoperatorConfig) {
   const maxAge = jwtExpiresToMs(teleoperatorConfig.jwtExpiresIn);
   res.cookie(teleoperatorConfig.cookieName, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    ...cookieBaseOptions(req, teleoperatorConfig),
     maxAge,
-    path: '/',
   });
 }
 
-function clearTeleopCookie(res, teleoperatorConfig) {
-  res.clearCookie(teleoperatorConfig.cookieName, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-  });
+function clearTeleopCookie(req, res, teleoperatorConfig) {
+  res.clearCookie(teleoperatorConfig.cookieName, cookieBaseOptions(req, teleoperatorConfig));
 }
 
 module.exports = {
@@ -97,4 +113,5 @@ module.exports = {
   setTeleopCookie,
   clearTeleopCookie,
   jwtExpiresToMs,
+  resolveCookieSecure,
 };

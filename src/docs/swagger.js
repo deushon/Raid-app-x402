@@ -15,7 +15,7 @@ const swaggerDefinition = {
     { name: 'Robots', description: 'Robot registration, status, and lifecycle operations.' },
     { name: 'Commands', description: 'High-level actions dispatched to robots.' },
     { name: 'Payments', description: 'x402 payment verification and callbacks.' },
-    { name: 'Teleoperator', description: 'Teleoperator registration, login, and session (JWT cookie).' },
+    { name: 'Teleoperator', description: 'Teleoperator registration, login; session via httpOnly cookie or Authorization Bearer (same JWT).' },
   ],
   servers: [
     {
@@ -30,6 +30,12 @@ const swaggerDefinition = {
         in: 'cookie',
         name: 'teleop_token',
         description: 'JWT set by POST /api/teleoperator/login or register.',
+      },
+      TeleoperatorBearer: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Same token as in accessToken response field or teleop_token cookie.',
       },
     },
     schemas: {
@@ -157,6 +163,10 @@ const swaggerDefinition = {
         properties: {
           ok: { type: 'boolean', example: true },
           user: { $ref: '#/components/schemas/TeleoperatorPublicProfile' },
+          accessToken: {
+            type: 'string',
+            description: 'JWT; for mobile/desktop send as Authorization Bearer (browser may use cookie only).',
+          },
         },
       },
     },

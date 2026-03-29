@@ -59,7 +59,17 @@ const bootstrap = async () => {
   const commandRouter = createCommandRouter({ config, registry, x402Service });
 
   const app = express();
-  app.use(cors());
+  if (config.server.trustProxy) {
+    app.set('trust proxy', config.server.trustProxy);
+  }
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    }),
+  );
   app.use(cookieParser());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));

@@ -4,7 +4,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 
 ## Возможности
 
-- **x402 V2** при вызовах роботов: первый запрос → **402** с `accepts[]` → оплата (шлюз или прямой Solana) → повтор с **`X-X402-Reference`** (см. [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
+- **x402 V2** при вызовах роботов: первый запрос → **402** с `accepts[]` → оплата (шлюз или прямой Solana) → повтор с `**X-X402-Reference`** (см. [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
 - Провайдеры оплат: внешний x402 gateway или **solana-direct** (`@solana/web3.js`).
 - Мониторинг здоровья роботов: опрос `/health` и legacy `/helth` (x402 при необходимости).
 - Реестр роботов в памяти: статус, методы, координаты.
@@ -26,20 +26,20 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 ### Установка и запуск
 
 **Вариант A — всё в фоне (Docker, рекомендуется для сервера)**  
-Поднимаются **PostgreSQL** и **Node-приложение** с политикой **`restart: unless-stopped`** (после перезагрузки хоста контейнеры стартуют снова, при падении процесса — перезапуск).
+Поднимаются **PostgreSQL** и **Node-приложение** с политикой `**restart: unless-stopped`** (после перезагрузки хоста контейнеры стартуют снова, при падении процесса — перезапуск).
 
 ```bash
 cp config/env.example .env   # заполните ключи, TELEOPERATOR_JWT_SECRET, ADMIN_* и т.д.
 docker compose up -d --build
 ```
 
-- API и UI доступны **по сети с любой машины** (если firewall пускает): **`http://<IP-или-DNS-сервера>:3000`**. Порт на хосте: `APP_HOST_PORT` (по умолчанию 3000), публикация **`0.0.0.0`** (все интерфейсы).
-- Внутри compose для приложения **`DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
-- Каталог **`config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
+- API и UI доступны **по сети с любой машины** (если firewall пускает): `**http://<IP-или-DNS-сервера>:3000`**. Порт на хосте: `APP_HOST_PORT` (по умолчанию 3000), публикация `**0.0.0.0**` (все интерфейсы).
+- Внутри compose для приложения `**DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
+- Каталог `**config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
 - Логи: `docker compose logs -f app`
 - Остановка: `docker compose down`
 
-Образ собирается из [`Dockerfile`](Dockerfile) в корне репозитория.
+Образ собирается из `[Dockerfile](Dockerfile)` в корне репозитория.
 
 **Вариант B — только Postgres в Docker, приложение локально (`npm run start`)**
 
@@ -52,24 +52,26 @@ npm run start                # продакшен
 npm run dev                  # nodemon
 ```
 
-Сервер слушает **`HOST` / `PORT`**. По умолчанию **`HOST=0.0.0.0`** — это **не** «только localhost»: процесс принимает соединения на **всех сетевых интерфейсах** машины, и с другого компьютера нужно открывать **`http://<публичный-IP-или-DNS-сервера>:3000`** (порт см. `PORT` / `APP_HOST_PORT` в Docker). Примеры с `localhost` в документации — для проверки **с самого сервера**. Если задать **`HOST=127.0.0.1`**, по сети достучаться нельзя (в логе будет предупреждение).
+Сервер слушает `**HOST` / `PORT**`. По умолчанию `**HOST=0.0.0.0**` — это **не** «только localhost»: процесс принимает соединения на **всех сетевых интерфейсах** машины, и с другого компьютера нужно открывать `**http://<публичный-IP-или-DNS-сервера>:3000`** (порт см. `PORT` / `APP_HOST_PORT` в Docker). Примеры с `localhost` в документации — для проверки **с самого сервера**. Если задать `**HOST=127.0.0.1`**, по сети достучаться нельзя (в логе будет предупреждение).
 
-**PostgreSQL (compose):** порт **5434** проброшен на **`127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схема `teleoperators` создаётся при старте приложения.
+**PostgreSQL (compose):** порт **5434** проброшен на `**127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схема `teleoperators` создаётся при старте приложения.
 
 **Вариант C — systemd без Docker (пример юнита)**  
-Шаблон: [`deploy/x402-raid-app.service.example`](deploy/x402-raid-app.service.example) — скопируйте в `/etc/systemd/system/`, поправьте пути и `User=`, затем `sudo systemctl enable --now x402-raid-app`.
+Шаблон: `[deploy/x402-raid-app.service.example](deploy/x402-raid-app.service.example)` — скопируйте в `/etc/systemd/system/`, поправьте пути и `User=`, затем `sudo systemctl enable --now x402-raid-app`.
 
 ## Интерфейсы
 
-| Путь | Назначение |
-| --- | --- |
-| `/` | Редирект на `/client` |
-| `/client` | Публичный UI: настройки RPC, список роботов/команд, direct/raid, оплата и выполнение |
-| `/ui` | Админка (статический UI): регистрация роботов, команды, карта — **требуется Basic Auth** (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
-| `/docs` | Swagger UI |
-| `/docs-json` | Спецификация OpenAPI (JSON) |
-| `/teleoperator` | UI телеоператора: регистрация, вход (только если задан `DATABASE_URL`) |
-| `/teleoperator/cabinet` | Личный кабинет (нужна сессия; иначе редирект на логин). HTML отдаётся только с сервера, не из публичной статики |
+
+| Путь                    | Назначение                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `/`                     | Редирект на `/client`                                                                                                          |
+| `/client`               | Публичный UI: настройки RPC, список роботов/команд, direct/raid, оплата и выполнение                                           |
+| `/ui`                   | Админка (статический UI): регистрация роботов, команды, карта — **требуется Basic Auth** (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
+| `/docs`                 | Swagger UI                                                                                                                     |
+| `/docs-json`            | Спецификация OpenAPI (JSON)                                                                                                    |
+| `/teleoperator`         | UI телеоператора: регистрация, вход (только если задан `DATABASE_URL`)                                                         |
+| `/teleoperator/cabinet` | Личный кабинет (нужна сессия; иначе редирект на логин). HTML отдаётся только с сервера, не из публичной статики                |
+
 
 ## Конфигурация
 
@@ -83,67 +85,89 @@ npm run dev                  # nodemon
 
 ### Админ-доступ
 
-| Переменная | Описание | По умолчанию |
-| --- | --- | --- |
-| `ADMIN_USERNAME` | Basic Auth пользователь | `admin` |
-| `ADMIN_PASSWORD` | Пароль (**смените в проде**) | `admin` |
 
-Защищённые префиксы: статика `/ui` и API `/api/admin/*`.
+| Переменная       | Описание                     | По умолчанию |
+| ---------------- | ---------------------------- | ------------ |
+| `ADMIN_USERNAME` | Basic Auth пользователь      | `admin`      |
+| `ADMIN_PASSWORD` | Пароль (**смените в проде**) | `admin`      |
+
+
+Защищённые префиксы: статика `/ui` и API `/api/admin/`*.
+
+### CORS и доступ из приложений
+
+- Включён **CORS** с **`credentials: true`** и динамическим **`Origin`** (отражается запрошенный origin). Браузерные SPA/другой домен могут вызывать API с `fetch(..., { credentials: 'include' })` или с заголовком **`Authorization: Bearer`** и JWT из поля **`accessToken`** в ответе login/register.
+- **Нативные** клиенты (iOS/Android/desktop) обычно **не используют CORS**; им достаточно обычного HTTP и заголовка **`Authorization: Bearer`**.
+- После **`POST /api/teleoperator/login`** или **`register`** в JSON приходит **`accessToken`** (тот же JWT, что в cookie `teleop_token`). Для приложений сохраняйте токен и передавайте: `Authorization: Bearer <accessToken>` на **`GET /api/teleoperator/me`** и далее.
 
 ### Телеоператор и база данных
 
-| Переменная | Описание |
-| --- | --- |
-| `DATABASE_URL` | URI подключения PostgreSQL. Без неё телеоператор отключён. |
-| `TELEOPERATOR_JWT_SECRET` | Секрет подписи JWT (**обязателен**, если задан `DATABASE_URL`). В dev при отсутствии env используется небезопасный дефолт (см. `src/config.js`); в `NODE_ENV=production` без секрета процесс не стартует. |
-| `TELEOPERATOR_JWT_EXPIRES_IN` | Срок JWT (например `7d`, `24h`). По умолчанию `7d`. |
-| `TELEOPERATOR_BCRYPT_ROUNDS` | Стоимость bcrypt (по умолчанию `10`). |
+
+| Переменная                    | Описание                                                                                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | URI подключения PostgreSQL. Без неё телеоператор отключён.                                                                                                                                                |
+| `TELEOPERATOR_JWT_SECRET`     | Секрет подписи JWT (**обязателен**, если задан `DATABASE_URL`). В dev при отсутствии env используется небезопасный дефолт (см. `src/config.js`); в `NODE_ENV=production` без секрета процесс не стартует. |
+| `TELEOPERATOR_JWT_EXPIRES_IN` | Срок JWT (например `7d`, `24h`). По умолчанию `7d`.                                                                                                                                                       |
+| `TELEOPERATOR_BCRYPT_ROUNDS`  | Стоимость bcrypt (по умолчанию `10`).                                                                                                                                                                     |
+| `TELEOPERATOR_COOKIE_SECURE`  | `auto` (по умолчанию), `always`, `never` — флаг **Secure** у cookie. В режиме **auto** cookie по HTTP получает `Secure: false`, по HTTPS (или за прокси с `X-Forwarded-Proto: https` и **`TRUST_PROXY`**) — `true`. |
+| `TRUST_PROXY`                 | Если приложение за reverse proxy: `1` или число хопов; нужно для корректного **auto** Secure и `req.secure`.                                                                                               |
+
 
 ## API (кратко)
 
 ### Сервис и роботы
 
-| Метод | Путь | Описание |
-| --- | --- | --- |
-| `GET` | `/health` | Статус сервиса, число роботов, флаг x402 |
-| `GET` / `POST` | `/api/robots` | Список / регистрация |
-| `PUT` / `DELETE` | `/api/robots/{id}` | Обновление / удаление |
-| `POST` | `/api/robots/{id}/refresh` | Принудительный health-check |
+
+| Метод            | Путь                       | Описание                                 |
+| ---------------- | -------------------------- | ---------------------------------------- |
+| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402 |
+| `GET` / `POST`   | `/api/robots`              | Список / регистрация                     |
+| `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление                    |
+| `POST`           | `/api/robots/{id}/refresh` | Принудительный health-check              |
+
 
 ### Команды (сервер как x402-клиент к роботам)
 
-| Метод | Путь | Описание |
-| --- | --- | --- |
-| `POST` | `/api/commands/dance` | `quantity`: `1`, `2` или `"all"`; x402 по необходимости |
-| `POST` | `/api/commands/buy-cola` | `location`, `quantity` |
+
+| Метод  | Путь                     | Описание                                                |
+| ------ | ------------------------ | ------------------------------------------------------- |
+| `POST` | `/api/commands/dance`    | `quantity`: `1`, `2` или `"all"`; x402 по необходимости |
+| `POST` | `/api/commands/buy-cola` | `location`, `quantity`                                  |
+
 
 ### Клиентский API (без админ-авторизации; для `/client` и внешних клиентов)
 
-| Метод | Путь | Описание |
-| --- | --- | --- |
-| `GET` / `POST` | `/api/client/settings` | Чтение / сохранение RPC-настроек (ключ Helius в ответе не отдаётся) |
-| `GET` | `/api/client/robots` | Готовые роботы для direct-режима |
-| `GET` | `/api/client/commands` | Агрегат команд по реестру |
-| `POST` | `/api/client/estimate` | Оценка цены: `mode` `direct` \| `raid`, `command`, опционально `robotId` |
-| `POST` | `/api/client/invoice` | Прокси первого POST на робота → **200** или **402** (инвойс) |
-| `POST` | `/api/client/execute` | После оплаты в кошельке: проверка tx, вызов робота с `X-X402-Reference` |
+
+| Метод          | Путь                   | Описание                                                                |
+| -------------- | ---------------------- | ----------------------------------------------------------------------- |
+| `GET` / `POST` | `/api/client/settings` | Чтение / сохранение RPC-настроек (ключ Helius в ответе не отдаётся)     |
+| `GET`          | `/api/client/robots`   | Готовые роботы для direct-режима                                        |
+| `GET`          | `/api/client/commands` | Агрегат команд по реестру                                               |
+| `POST`         | `/api/client/estimate` | Оценка цены: `mode` `direct` | `raid`, `command`, опционально `robotId` |
+| `POST`         | `/api/client/invoice`  | Прокси первого POST на робота → **200** или **402** (инвойс)            |
+| `POST`         | `/api/client/execute`  | После оплаты в кошельке: проверка tx, вызов робота с `X-X402-Reference` |
+
 
 ### Платежи и админ API
 
-| Метод | Путь | Описание |
-| --- | --- | --- |
-| `POST` | `/api/payments/x402` | Пример callback с проверкой подписи (x402 middleware) |
-| `GET` / `POST` | `/api/admin/ai-agent` | Чтение / сохранение конфига AI (Basic Auth) |
-| `GET` / `POST` | `/api/admin/client-settings` | Просмотр / сохранение RPC с админки (Basic Auth) |
+
+| Метод          | Путь                         | Описание                                              |
+| -------------- | ---------------------------- | ----------------------------------------------------- |
+| `POST`         | `/api/payments/x402`         | Пример callback с проверкой подписи (x402 middleware) |
+| `GET` / `POST` | `/api/admin/ai-agent`        | Чтение / сохранение конфига AI (Basic Auth)           |
+| `GET` / `POST` | `/api/admin/client-settings` | Просмотр / сохранение RPC с админки (Basic Auth)      |
+
 
 ### Телеоператор (без Basic Auth; сессия по cookie `teleop_token`)
 
-| Метод | Путь | Описание |
-| --- | --- | --- |
-| `POST` | `/api/teleoperator/register` | Тело: `login`, `password`, `walletPublicKey` (Solana). Ответ 201, выставляется cookie. |
-| `POST` | `/api/teleoperator/login` | `login`, `password`; cookie. |
-| `POST` | `/api/teleoperator/logout` | Сброс cookie. |
-| `GET` | `/api/teleoperator/me` | Профиль текущего пользователя (нужна валидная сессия). |
+
+| Метод  | Путь                         | Описание                                                                               |
+| ------ | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `POST` | `/api/teleoperator/register` | Тело: `login`, `password`, `walletPublicKey` (Solana). Ответ 201: cookie + **`accessToken`**. |
+| `POST` | `/api/teleoperator/login`    | `login`, `password`; cookie + **`accessToken`**.                                              |
+| `POST` | `/api/teleoperator/logout`   | Сброс cookie.                                                                                 |
+| `GET`  | `/api/teleoperator/me`       | Профиль: cookie **`teleop_token`** или заголовок **`Authorization: Bearer`** с JWT.         |
+
 
 Полная схема запросов/ответов — в **Swagger** (`/docs`). Детали протокола x402 в приложении — [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
@@ -163,7 +187,7 @@ npm run dev
 npm test
 ```
 
-Тесты телеоператора и репозитория требуют **`TEST_DATABASE_URL`** (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
+Тесты телеоператора и репозитория требуют `**TEST_DATABASE_URL**` (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
 
 ```bash
 export TEST_DATABASE_URL=postgres://x402:x402@127.0.0.1:5434/x402raid

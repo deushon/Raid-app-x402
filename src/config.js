@@ -62,10 +62,25 @@ const loadConfig = (argv = []) => {
     logger.warn('x402 private key is not configured. Outgoing payments will fail until configured.');
   }
 
+  const trustProxyRaw = process.env.TRUST_PROXY;
+  let trustProxy = false;
+  if (trustProxyRaw !== undefined && trustProxyRaw !== '' && trustProxyRaw !== 'false' && trustProxyRaw !== '0') {
+    trustProxy = trustProxyRaw === 'true' ? 1 : toNumber(trustProxyRaw, 1);
+  }
+
+  const cookieSecureRaw = (process.env.TELEOPERATOR_COOKIE_SECURE || 'auto').toLowerCase();
+  let teleoperatorCookieSecureMode = 'auto';
+  if (cookieSecureRaw === 'true' || cookieSecureRaw === '1' || cookieSecureRaw === 'always') {
+    teleoperatorCookieSecureMode = 'always';
+  } else if (cookieSecureRaw === 'false' || cookieSecureRaw === '0' || cookieSecureRaw === 'never') {
+    teleoperatorCookieSecureMode = 'never';
+  }
+
   return {
     server: {
       host: process.env.HOST || args.host || '0.0.0.0',
       port: toNumber(args.port || process.env.PORT, 3000),
+      trustProxy,
     },
     x402: {
       privateKey,
@@ -137,6 +152,8 @@ const loadConfig = (argv = []) => {
       jwtExpiresIn: process.env.TELEOPERATOR_JWT_EXPIRES_IN || '7d',
       cookieName: 'teleop_token',
       bcryptRounds: toNumber(process.env.TELEOPERATOR_BCRYPT_ROUNDS, 10),
+      /** 'auto' | 'always' | 'never' — флаг Secure на cookie (HTTP без TLS ломал логин при always+production) */
+      cookieSecureMode: teleoperatorCookieSecureMode,
     },
   };
 };

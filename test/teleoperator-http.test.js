@@ -26,6 +26,7 @@ run('teleoperator HTTP', () => {
         jwtExpiresIn: '1h',
         cookieName: 'teleop_token',
         bcryptRounds: 4,
+        cookieSecureMode: 'never',
       },
     };
 
@@ -52,6 +53,7 @@ run('teleoperator HTTP', () => {
       .expect(201);
     assert.ok(resReg.body.user);
     assert.equal(resReg.body.user.login, 'httptest');
+    assert.ok(typeof resReg.body.accessToken === 'string' && resReg.body.accessToken.length > 10);
 
     const resMe = await agent.get('/api/teleoperator/me').expect(200);
     assert.equal(resMe.body.user.walletPublicKey, walletPk);
@@ -76,5 +78,21 @@ run('teleoperator HTTP', () => {
 
     const me = await agent.get('/api/teleoperator/me').expect(200);
     assert.equal(me.body.user.login, 'loguser');
+  });
+
+  test('GET /me with Authorization Bearer (no cookie)', async () => {
+    const walletPk = Keypair.generate().publicKey.toBase58();
+    const resReg = await request(app)
+      .post('/api/teleoperator/register')
+      .send({ login: 'beareruser', password: 'password12', walletPublicKey: walletPk })
+      .expect(201);
+    const token = resReg.body.accessToken;
+    assert.ok(token);
+
+    const me = await request(app)
+      .get('/api/teleoperator/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    assert.equal(me.body.user.login, 'beareruser');
   });
 });

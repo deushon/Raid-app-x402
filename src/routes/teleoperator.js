@@ -29,7 +29,7 @@ const createTeleoperatorRouter = ({ pool, config }) => {
    *     tags:
    *       - Teleoperator
    *     summary: Register teleoperator account
-   *     description: Creates a user with bcrypt-hashed password and Solana wallet public key; sets session cookie.
+   *     description: Creates a user with bcrypt-hashed password and Solana wallet public key; sets session cookie and returns accessToken (same JWT) for native clients.
    *     requestBody:
    *       required: true
    *       content:
@@ -53,8 +53,8 @@ const createTeleoperatorRouter = ({ pool, config }) => {
       const { login, password, walletPublicKey } = req.body || {};
       const user = await teleoperatorRepository.createUser({ login, password, walletPublicKey });
       const token = signTeleopToken({ id: user.id, login: user.login }, config.teleoperator);
-      setTeleopCookie(res, token, config.teleoperator);
-      return res.status(201).json({ ok: true, user });
+      setTeleopCookie(req, res, token, config.teleoperator);
+      return res.status(201).json({ ok: true, user, accessToken: token });
     } catch (error) {
       if (error.code === 'VALIDATION') {
         return res.status(400).json({ error: error.message });
@@ -74,7 +74,7 @@ const createTeleoperatorRouter = ({ pool, config }) => {
    *     tags:
    *       - Teleoperator
    *     summary: Login with login and password
-   *     description: Sets httpOnly session cookie (JWT).
+   *     description: Sets httpOnly session cookie (JWT) and returns accessToken for Authorization Bearer from apps.
    *     requestBody:
    *       required: true
    *       content:
@@ -102,8 +102,8 @@ const createTeleoperatorRouter = ({ pool, config }) => {
       }
       const user = teleoperatorRepository.toPublicProfile(row);
       const token = signTeleopToken({ id: user.id, login: user.login }, config.teleoperator);
-      setTeleopCookie(res, token, config.teleoperator);
-      return res.json({ ok: true, user });
+      setTeleopCookie(req, res, token, config.teleoperator);
+      return res.json({ ok: true, user, accessToken: token });
     } catch (error) {
       logger.error('Teleoperator login failed', { error: error.message });
       return res.status(500).json({ error: 'Login failed' });
@@ -129,7 +129,7 @@ const createTeleoperatorRouter = ({ pool, config }) => {
    *                   type: boolean
    */
   router.post('/logout', (req, res) => {
-    clearTeleopCookie(res, config.teleoperator);
+    clearTeleopCookie(req, res, config.teleoperator);
     return res.json({ ok: true });
   });
 
@@ -142,6 +142,7 @@ const createTeleoperatorRouter = ({ pool, config }) => {
    *     summary: Current teleoperator profile
    *     security:
    *       - TeleoperatorCookie: []
+   *       - TeleoperatorBearer: []
    *     responses:
    *       200:
    *         description: Public profile (no password hash).

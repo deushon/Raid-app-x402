@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./src/index.js",
     "dev": "nodemon ./src/index.js",
-    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js"
+    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js test/cors-api.test.js"
   },
   "keywords": [
     "x402",
