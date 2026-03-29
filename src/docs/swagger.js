@@ -23,7 +23,7 @@ const swaggerDefinition = {
     {
       name: 'Teleop',
       description:
-        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. Body: required string **`message`**; **`metadata`** with **`task_id`**, **`error_context`**, optional **`situation_report`** (long UTF-8 narrative for operators; see schema **RobotTeleopHelpRequest**). **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
     },
     { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
     {
@@ -184,6 +184,40 @@ const swaggerDefinition = {
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
           location: { type: 'object', nullable: true },
+        },
+      },
+      RobotTeleopHelpRequest: {
+        type: 'object',
+        required: ['message'],
+        description:
+          'Robot help request. **`message`** is required. **`metadata`** SHOULD include **`task_id`** and **`error_context`** (strings; `error_context` may be empty). **`situation_report`** is optional UTF-8 context (robot state, recent actions, why help is needed); if omitted, the server stores an empty string. Extra `metadata` properties are preserved. Max ~64 KiB UTF-8 for `situation_report` (server truncates). Legacy clients may omit `metadata` entirely (server supplies default empty strings for the standard keys).',
+        properties: {
+          message: {
+            type: 'string',
+            example: 'Need assistance',
+            description: 'Short label for the help request.',
+          },
+          metadata: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Context object; standard keys are normalized to strings.',
+            properties: {
+              task_id: {
+                type: 'string',
+                example: 'task-42',
+                description: 'Task or session id on the robot side.',
+              },
+              error_context: {
+                type: 'string',
+                example: '{"code":500}',
+                description: 'Machine-readable error details; often JSON; may be empty.',
+              },
+              situation_report: {
+                type: 'string',
+                description: 'Free-text UTF-8 situation summary for the operator / VR UI.',
+              },
+            },
+          },
         },
       },
       RobotEnrollRequest: {

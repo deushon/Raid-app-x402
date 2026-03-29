@@ -48,7 +48,7 @@
 | **URL** | `http(s)://<HOST>:<PORT>/api/robots/<robotId>/teleop/help` |
 | **`robotId`** | UUID из ответа **`POST /api/robots/enroll`** или админского **`POST /api/admin/robots`** (не `host:port` робота). |
 | **Секрет робота** | Заголовок **`X-Robot-Teleop-Secret: <секрет>`** — тот же, что в реестре. **Или** **`Authorization: Bearer <секрет>`** (то же значение). |
-| **Тело** | Необязательно: `{ "message": "…", "metadata": { … } }`. |
+| **Тело** | JSON: обязательно строковое **`message`**. Объект **`metadata`** рекомендуется: строки **`task_id`**, **`error_context`** (может быть пустой), опционально **`situation_report`** — свободный UTF-8 текст о состоянии робота (до ~64 KiB по байтам UTF-8, длиннее сервер обрезает). Если **`metadata`** нет, сервер подставит пустые строки для этих полей. Дополнительные поля в **`metadata`** сохраняются. |
 | **Content-Type** | При теле: `application/json`. |
 
 ### Ответы
@@ -59,6 +59,7 @@
 | **200** | Уже есть открытая заявка для этого робота; тот же формат, **`duplicate: true`**. |
 | **401** | Нет/неверный секрет или у робота не задан `teleopSecret`. |
 | **404** | Нет такого `robotId` в реестре. |
+| **400** | Нет или не строка **`message`**. |
 | **500** | Ошибка сервера/БД. |
 
 После **201/200** событие **`help_request`** уходит по **`/ws/teleoperator?token=…`**: если у робота есть активные строки в **`teleoperator_robot_grants`**, только этим операторам; иначе — всем подключённым с валидным JWT. На роботе дополнительно ничего открывать для этого не нужно.
@@ -70,7 +71,7 @@ curl -sS -X POST \
   "http://RAID_HOST:3000/api/robots/ROBOT_UUID/teleop/help" \
   -H "Content-Type: application/json" \
   -H "X-Robot-Teleop-Secret: your-shared-secret" \
-  -d '{"message":"Need assistance","metadata":{"battery":12}}'
+  -d '{"message":"Need assistance","metadata":{"task_id":"run-1","error_context":"","situation_report":"Near door; navigation stalled.","battery":12}}'
 ```
 
 ### Требования к `teleopSecret`

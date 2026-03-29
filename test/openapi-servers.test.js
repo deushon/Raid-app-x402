@@ -11,6 +11,13 @@ test('OpenAPI servers[0] is relative so Swagger Try it out uses current host', (
   );
 });
 
+test('OpenAPI defines RobotTeleopHelpRequest with situation_report', () => {
+  const schema = swaggerSpec.components.schemas.RobotTeleopHelpRequest;
+  assert.ok(schema);
+  assert.ok(schema.required.includes('message'));
+  assert.ok(schema.properties.metadata.properties.situation_report);
+});
+
 test('OpenAPI documents teleoperator JWT lifetime and where it is required', () => {
   const teleopTag = swaggerSpec.tags.find((t) => t.name === 'Teleoperator');
   assert.ok(teleopTag);

@@ -7,6 +7,7 @@ const {
   getOpenHelpRequestMeta,
   acceptHelpRequest,
 } = require('../services/teleopHelpRepository');
+const { normalizeRobotTeleopHelpBody } = require('../utils/teleopHelpPayload');
 
 function readRobotTeleopSecret(req) {
   const h = req.headers['x-robot-teleop-secret'];
@@ -46,7 +47,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. If an open request already exists for this robot, returns that request with duplicate=true. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -55,20 +56,18 @@ function createTeleopHelpRouter({
    *           type: string
    *           format: uuid
    *     requestBody:
-   *       required: false
+   *       required: true
    *       content:
    *         application/json:
    *           schema:
-   *             type: object
-   *             properties:
-   *               message:
-   *                 type: string
-   *               metadata:
-   *                 type: object
-   *                 additionalProperties: true
+   *             $ref: '#/components/schemas/RobotTeleopHelpRequest'
    *     responses:
    *       200:
    *         description: Help request created or existing open request returned.
+   *       201:
+   *         description: New help request created (same body shape as 200).
+   *       400:
+   *         description: Invalid JSON body (e.g. missing or non-string `message`).
    *       401:
    *         description: Missing or invalid robot secret.
    *       404:
@@ -89,18 +88,15 @@ function createTeleopHelpRouter({
         return res.status(401).json({ error: 'Invalid or missing X-Robot-Teleop-Secret' });
       }
 
-      const body = req.body && typeof req.body === 'object' ? req.body : {};
-      const payload = {};
-      if (typeof body.message === 'string') {
-        payload.message = body.message;
+      const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+      if (typeof body.message !== 'string') {
+        return res.status(400).json({ error: 'message is required and must be a string' });
       }
-      if (body.metadata != null && typeof body.metadata === 'object') {
-        payload.metadata = body.metadata;
-      }
+      const payload = normalizeRobotTeleopHelpBody(body);
 
       const { row, duplicate } = await createHelpRequest(pool, {
         robotId,
-        payload: Object.keys(payload).length ? payload : null,
+        payload,
       });
 
       const event = {
@@ -151,7 +147,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: List open help requests visible to the current operator
-   *     description: Includes open requests for robots with no active teleoperator_robot_grants (any logged-in operator), and for robots where this operator has an active grant.
+   *     description: Includes open requests for robots with no active teleoperator_robot_grants (any logged-in operator), and for robots where this operator has an active grant. Each item `payload` includes `message` and `metadata` with `task_id`, `error_context`, `situation_report` (and any extra keys the robot sent).
    *     security:
    *       - TeleoperatorCookie: []
    *       - TeleoperatorBearer: []

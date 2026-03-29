@@ -134,6 +134,12 @@ run('teleop help HTTP', () => {
       .send({ message: 'need help' })
       .expect(401);
 
+    await request(app)
+      .post(`/api/robots/${robotId}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({})
+      .expect(400);
+
     const resHelp = await request(app)
       .post(`/api/robots/${robotId}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
@@ -152,6 +158,11 @@ run('teleop help HTTP', () => {
     const list = await agent.get('/api/teleoperator/help-requests').expect(200);
     assert.equal(list.body.helpRequests.length, 1);
     assert.equal(list.body.helpRequests[0].id, helpId);
+    const p = list.body.helpRequests[0].payload;
+    assert.equal(p.message, 'need help');
+    assert.equal(p.metadata.task_id, '');
+    assert.equal(p.metadata.error_context, '');
+    assert.equal(p.metadata.situation_report, '');
 
     const acc = await agent
       .post(`/api/teleoperator/help-requests/${helpId}/accept`)
@@ -300,6 +311,45 @@ run('teleop help HTTP', () => {
     const l2 = await a2.get('/api/teleoperator/help-requests').expect(200);
     assert.equal(l2.body.helpRequests.length, 1);
     assert.equal(l2.body.helpRequests[0].id, hOpen.body.helpRequest.id);
+  });
+
+  test('help payload includes situation_report for operator list', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65526,
+      teleopSecret,
+    });
+    const sr = 'Stuck near obstacle; last cmd was nav_goal.';
+    await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({
+        message: 'Need assistance',
+        metadata: {
+          task_id: 'sess-9',
+          error_context: '{"n":1}',
+          situation_report: sr,
+        },
+      })
+      .expect(201);
+
+    const w = Keypair.generate().publicKey.toBase58();
+    const agent = request.agent(app);
+    await agent
+      .post('/api/teleoperator/register')
+      .send({ login: 'opsr', password: 'password12', walletPublicKey: w })
+      .expect(201);
+    const list = await agent.get('/api/teleoperator/help-requests').expect(200);
+    assert.equal(list.body.helpRequests.length, 1);
+    const p = list.body.helpRequests[0].payload;
+    assert.equal(p.metadata.task_id, 'sess-9');
+    assert.equal(p.metadata.error_context, '{"n":1}');
+    assert.equal(p.metadata.situation_report, sr);
   });
 
   test('grantRepository listActive exposes teleoperator_login (login_normalized)', async () => {
