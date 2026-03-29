@@ -7,6 +7,41 @@ const {
 } = require('../services/teleopHelpRepository');
 
 /**
+ * URL и опции клиента ws к rosbridge на роботе: идентификатор телеоператора (JWT sub + login).
+ * Робот может прочитать заголовки на стороне прокси/nginx или query (если стек их отдаёт в приложение).
+ *
+ * @param {{ rosHost: string, rosPort: number, user: { id: string, login?: string }, teleopCfg: { forwardOperatorHeaders?: boolean, forwardOperatorQuery?: boolean } }} p
+ * @returns {{ url: string, wsOptions: { headers: Record<string, string> } | null }}
+ */
+function buildRosbridgeWebSocketTarget({ rosHost, rosPort, user, teleopCfg }) {
+  let url = `ws://${rosHost}:${rosPort}`;
+  const forwardH = teleopCfg?.forwardOperatorHeaders !== false;
+  const forwardQ = teleopCfg?.forwardOperatorQuery !== false;
+
+  /** @type {Record<string, string>} */
+  const headers = {};
+  if (forwardH) {
+    headers['X-Teleoperator-Id'] = String(user.id);
+    if (user.login) {
+      headers['X-Teleoperator-Login'] = String(user.login);
+    }
+  }
+
+  if (forwardQ) {
+    const params = new URLSearchParams();
+    params.set('teleoperator_id', String(user.id));
+    if (user.login) {
+      params.set('teleoperator_login', String(user.login));
+    }
+    const qs = params.toString();
+    url += url.includes('?') ? `&${qs}` : `?${qs}`;
+  }
+
+  const wsOptions = forwardH && Object.keys(headers).length > 0 ? { headers } : null;
+  return { url, wsOptions };
+}
+
+/**
  * @param {import('http').Server} httpServer
  * @param {{ config: object, pool: import('pg').Pool, registry: object, teleopHub: object }} deps
  */
@@ -146,12 +181,17 @@ function handleProxySession(ws, ctx) {
 
     const rosHost = robot.rosbridgeHost || robot.host;
     const rosPort = robot.rosbridgePort != null ? robot.rosbridgePort : 9090;
-    const rosUrl = `ws://${rosHost}:${rosPort}`;
+    const { url: rosUrl, wsOptions } = buildRosbridgeWebSocketTarget({
+      rosHost,
+      rosPort,
+      user,
+      teleopCfg,
+    });
     const maxBytes = teleopCfg.maxMessageBytes;
     const connectTimeout = teleopCfg.rosbridgeConnectTimeoutMs;
 
     try {
-      robotWs = new WebSocket(rosUrl);
+      robotWs = wsOptions ? new WebSocket(rosUrl, wsOptions) : new WebSocket(rosUrl);
     } catch (error) {
       logger.error('robot WebSocket create failed', { error: error.message, rosUrl });
       reservedProxySessions.delete(sessionId);
@@ -242,4 +282,4 @@ function handleProxySession(ws, ctx) {
   });
 }
 
-module.exports = { attachTeleopWebSockets };
+module.exports = { attachTeleopWebSockets, buildRosbridgeWebSocketTarget };

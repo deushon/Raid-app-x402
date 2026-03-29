@@ -1,13 +1,5 @@
 const express = require('express');
 
-function sanitizeRobot(robot) {
-  if (!robot) {
-    return robot;
-  }
-  const { teleopSecret, ...rest } = robot;
-  return rest;
-}
-
 const createRobotsRouter = ({ registry }) => {
   const router = express.Router();
 
@@ -18,6 +10,9 @@ const createRobotsRouter = ({ registry }) => {
    *     tags:
    *       - Robots
    *     summary: List registered robots
+   *     description: >
+   *       Returns the in-memory registry for this server process (robots you registered via POST
+   *       or that existed since last restart). OpenAPI "Example" values are documentation only, not live data.
    *     responses:
    *       200:
    *         description: Current robot registry.
@@ -32,7 +27,7 @@ const createRobotsRouter = ({ registry }) => {
    *                     $ref: '#/components/schemas/Robot'
    */
   router.get('/', (req, res) => {
-    res.json({ robots: registry.list().map(sanitizeRobot) });
+    res.json({ robots: registry.list() });
   });
 
   /**
@@ -81,7 +76,7 @@ const createRobotsRouter = ({ registry }) => {
         rosbridgePort,
         teleopSecret,
       });
-      return res.status(201).json(sanitizeRobot(robot));
+      return res.status(201).json(robot);
     } catch (error) {
       return next(error);
     }
@@ -122,7 +117,7 @@ const createRobotsRouter = ({ registry }) => {
       const { robotId } = req.params;
       const updates = req.body;
       const robot = registry.updateRobot(robotId, updates);
-      return res.json(sanitizeRobot(robot));
+      return res.json(robot);
     } catch (error) {
       return next(error);
     }
@@ -183,7 +178,7 @@ const createRobotsRouter = ({ registry }) => {
     try {
       const { robotId } = req.params;
       const robot = await registry.refreshRobot(robotId);
-      return res.json(sanitizeRobot(robot));
+      return res.json(robot);
     } catch (error) {
       return next(error);
     }

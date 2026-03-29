@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./src/index.js",
     "dev": "nodemon ./src/index.js",
-    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js test/teleop-help-http.test.js test/cors-api.test.js"
+    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js test/teleop-help-http.test.js test/teleop-rosbridge-forward.test.js test/cors-api.test.js test/admin-http.test.js test/robots-http.test.js test/openapi-servers.test.js test/env-bom.test.js"
   },
   "keywords": [
     "x402",

@@ -15,13 +15,24 @@ const swaggerDefinition = {
     { name: 'Robots', description: 'Robot registration, status, and lifecycle operations.' },
     { name: 'Commands', description: 'High-level actions dispatched to robots.' },
     { name: 'Payments', description: 'x402 payment verification and callbacks.' },
-    { name: 'Teleoperator', description: 'Teleoperator registration, login; session via httpOnly cookie or Authorization Bearer (same JWT).' },
-    { name: 'Teleop', description: 'Help requests from robots, operator accept, WebSocket proxy to ROSBridge (see README).' },
+    {
+      name: 'Teleoperator',
+      description:
+        'Registration and login issue a JWT (`accessToken` in JSON and httpOnly cookie `teleop_token`). **Default lifetime is 7 days** (`exp` in the token); set **`TELEOPERATOR_JWT_EXPIRES_IN`** to override (jsonwebtoken duration, e.g. `24h`, `7d`). **This JWT is required** for `GET /api/teleoperator/me`. It is **not** required for `POST /api/teleoperator/register`, `POST /api/teleoperator/login`, or `POST /api/teleoperator/logout` (the latter only clears the cookie).',
+    },
+    {
+      name: 'Teleop',
+      description:
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (shared secret), not the operator JWT. **Operator JWT** (same as teleoperator session) is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. Pass the same token as **`?token=`** on WebSockets `/ws/teleoperator` (help events) and `/ws/teleop/session/{sessionId}` (duplex ROSBridge proxy). JWT lifetime: see tag **Teleoperator**.',
+    },
+    { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
   ],
+  // Relative base so Swagger "Try it out" hits the same host/port as the /docs page.
+  // A fixed http://localhost:3000 breaks when /docs is opened via LAN IP (fetch goes to the client PC).
   servers: [
     {
-      url: 'http://localhost:3000',
-      description: 'Local development server',
+      url: '/',
+      description: 'Current origin (recommended for /docs on localhost or LAN)',
     },
   ],
   components: {
@@ -30,13 +41,26 @@ const swaggerDefinition = {
         type: 'apiKey',
         in: 'cookie',
         name: 'teleop_token',
-        description: 'JWT set by POST /api/teleoperator/login or register.',
+        description:
+          'JWT from POST /api/teleoperator/login or register. Default **max age 7 days** (configurable via **TELEOPERATOR_JWT_EXPIRES_IN**). Use on protected routes: GET /api/teleoperator/me, GET /api/teleoperator/help-requests, POST /api/teleoperator/help-requests/{id}/accept; also as **?token=** on /ws/teleoperator and /ws/teleop/session/{sessionId}.',
       },
       TeleoperatorBearer: {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Same token as in accessToken response field or teleop_token cookie.',
+        description:
+          'Same JWT as **accessToken** or cookie **teleop_token** (default lifetime **7d**, env **TELEOPERATOR_JWT_EXPIRES_IN**). Required for: GET /api/teleoperator/me, GET /api/teleoperator/help-requests, POST /api/teleoperator/help-requests/{id}/accept; WebSocket query **token** on /ws/teleoperator and /ws/teleop/session/{sessionId}.',
+      },
+      AdminSessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'admin_session',
+        description: 'JWT set by POST /api/admin/login (browser UI).',
+      },
+      AdminBasic: {
+        type: 'http',
+        scheme: 'basic',
+        description: 'ADMIN_USERNAME / ADMIN_PASSWORD (optional; for scripts and curl).',
       },
     },
     schemas: {
@@ -73,14 +97,6 @@ const swaggerDefinition = {
               ],
             },
           },
-          location: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              lat: { type: 'number', example: 55.7522 },
-              lng: { type: 'number', example: 37.6156 },
-            },
-          },
         },
       },
       Robot: {
@@ -93,8 +109,23 @@ const swaggerDefinition = {
           requiresX402: { type: 'boolean', example: false },
           rosbridgeHost: { type: 'string', description: 'ROSBridge WebSocket host (defaults to host)' },
           rosbridgePort: { type: 'integer', example: 9090, description: 'ROSBridge port' },
+          teleopSecret: {
+            type: 'string',
+            nullable: true,
+            description:
+              'Shared secret for POST /api/robots/{id}/teleop/help. Currently included in GET /api/robots and other robot JSON responses; treat as sensitive.',
+          },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
-          lastHealthCheckAt: { type: 'string', format: 'date-time' },
+          lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
+          location: {
+            type: 'object',
+            nullable: true,
+            description: 'Last known geo position from robot health payload (top-level on the robot object).',
+            properties: {
+              lat: { type: 'number', example: 55.7522 },
+              lng: { type: 'number', example: 37.6156 },
+            },
+          },
         },
       },
       RegisterRobotRequest: {
@@ -109,7 +140,8 @@ const swaggerDefinition = {
           rosbridgePort: { type: 'integer', example: 9090 },
           teleopSecret: {
             type: 'string',
-            description: 'Shared secret for POST /api/robots/{id}/teleop/help (not returned in GET list)',
+            description:
+              'Shared secret for POST /api/robots/{id}/teleop/help; echoed in GET /api/robots and robot responses until restricted.',
           },
         },
       },
@@ -174,8 +206,17 @@ const swaggerDefinition = {
           user: { $ref: '#/components/schemas/TeleoperatorPublicProfile' },
           accessToken: {
             type: 'string',
-            description: 'JWT; for mobile/desktop send as Authorization Bearer (browser may use cookie only).',
+            description:
+              'JWT (`sub` = user id, `login`, standard `iat`/`exp`). Default **7d** until **exp**; override server-side with **TELEOPERATOR_JWT_EXPIRES_IN**. Use as **Authorization: Bearer** (or cookie in browser) on protected teleoperator/teleop routes and as **?token=** for teleop WebSockets.',
           },
+        },
+      },
+      AdminLoginRequest: {
+        type: 'object',
+        required: ['username', 'password'],
+        properties: {
+          username: { type: 'string', example: 'admin' },
+          password: { type: 'string', format: 'password' },
         },
       },
     },

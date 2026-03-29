@@ -1,10 +1,10 @@
 # x402 Raid Control Service
 
-Node.js (Express) сервис, который оркестрирует x402-платежи и вызовы роботов. Есть **публичный клиентский UI** (`/client`), **админ-панель** (`/ui`, Basic Auth), REST API для реестра роботов, высокоуровневых команд и **клиентского потока** (оценка, инвойс 402, оплата в браузере, выполнение с `X-X402-Reference`).
+Node.js (Express) сервис, который оркестрирует x402-платежи и вызовы роботов. Есть **публичный клиентский UI** (`/client`), **админ-панель** (`/ui`, Basic Auth), REST API для реестра роботов, высокоуровневых команд и **клиентского потока** (оценка, инвойс 402, оплата в браузере, выполнение с заголовком **X-X402-Reference**).
 
 ## Возможности
 
-- **x402 V2** при вызовах роботов: первый запрос → **402** с `accepts[]` → оплата (шлюз или прямой Solana) → повтор с `**X-X402-Reference`** (см. [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
+- **x402 V2** при вызовах роботов: первый запрос → **402** с `accepts[]` → оплата (шлюз или прямой Solana) → повтор с заголовком **X-X402-Reference** (см. [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
 - Провайдеры оплат: внешний x402 gateway или **solana-direct** (`@solana/web3.js`).
 - Мониторинг здоровья роботов: опрос `/health` и legacy `/helth` (x402 при необходимости).
 - Реестр роботов в памяти: статус, методы, координаты.
@@ -13,7 +13,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **ClientPaymentService**: проверка Solana-транзакции и задел под refund при сбое выполнения.
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (см. `src/docs/swagger.js` и JSDoc `@openapi` в роутерах).
 - **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token` и поле **`accessToken`** в JSON (для WebSocket и нативных клиентов). Личный кабинет `/teleoperator/cabinet`: открытые заявки «помощь», приём, **WebSocket URL** для прокси ROSBridge (см. ниже).
-- **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; подключённые телеоператоры получают событие по **`/ws/teleoperator?token=JWT`**.
+- **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). В это подключение по умолчанию добавляются **идентификатор телеоператора**: заголовки **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** (отключаются env **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; подключённые телеоператоры получают событие по **`/ws/teleoperator?token=JWT`**.
 
 ## Быстрый старт
 
@@ -117,7 +117,10 @@ npm run dev                  # nodemon
 | `TELEOP_WS_ENABLED`           | `false` или `0` — отключить обработчик WebSocket телеопа (REST заявок остаётся при `DATABASE_URL`). По умолчанию включено.                                                                              |
 | `TELEOP_MAX_MESSAGE_BYTES`    | Лимит размера кадра WS в байтах (по умолчанию 16 MiB).                                                                                                                                                     |
 | `TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS` | Таймаут подключения сервера к rosbridge на роботе (мс).                                                                                                                                            |
+| `TELEOP_FORWARD_OPERATOR_HEADERS` | `true` / `false` (по умолчанию `true`; выключают также `0`, `false`, `no`, `off`). Исходящий WS **raid_app → rosbridge**: заголовки **`X-Teleoperator-Id`** и при наличии логина **`X-Teleoperator-Login`**. |
+| `TELEOP_FORWARD_OPERATOR_QUERY`   | `true` / `false` (по умолчанию `true`). К URL подключения к rosbridge добавляются query **`teleoperator_id`** и при наличии логина **`teleoperator_login`**. Если rosbridge/прокси ломается на `?…`, поставьте `false`. |
 
+Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js).
 
 ## API (кратко)
 
@@ -126,8 +129,8 @@ npm run dev                  # nodemon
 
 | Метод            | Путь                       | Описание                                 |
 | ---------------- | -------------------------- | ---------------------------------------- |
-| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleopWs`** |
-| `GET` / `POST`   | `/api/robots`              | Список / регистрация (в ответе **нет** `teleopSecret`; опционально тело: `rosbridgeHost`, `rosbridgePort`, `teleopSecret`) |
+| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`** |
+| `GET` / `POST`   | `/api/robots`              | Список / регистрация в **памяти процесса** (после перезапуска список пуст). В ответе сейчас есть **`teleopSecret`** (чувствительные данные; позже может быть скрыт). Тело регистрации: опционально `rosbridgeHost`, `rosbridgePort`, `teleopSecret`. **Примеры в Swagger** (`Robo-1`, фиксированный UUID) — только документация; живые данные — то, что вы зарегистрировали (например `test1`). |
 | `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление                    |
 | `POST`           | `/api/robots/{id}/refresh` | Принудительный health-check              |
 
@@ -188,7 +191,10 @@ npm run dev                  # nodemon
 4. **WebSocket (вместо `ws://<робот>:9090`)**:
    - `ws(s)://<host>:<port>/ws/teleop/session/<sessionId>?token=<URL-encoded JWT>`
    - После подключения передавайте **те же текстовые кадры JSON**, что при прямом ROSBridge WebSocket (например `op: subscribe`, `op: publish`).
-5. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. При обрыве операторского сокета сессия в БД завершается, повторный приём заявки — новая сессия.
+5. **Что видит робот при активной сессии:** с хоста `raid_app` к `ws://rosbridgeHost:rosbridgePort` уходит **второй** WebSocket (сервер → rosbridge). В нём по умолчанию передаются **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** — чтобы на стороне робота (nginx, обёртка, логирование) было известно, **какой оператор** ведёт сессию. Отключение: **`TELEOP_FORWARD_OPERATOR_HEADERS`**, **`TELEOP_FORWARD_OPERATOR_QUERY`**. Стандартный rosbridge эти поля может не интерпретировать.
+6. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. При обрыве операторского сокета сессия в БД завершается, повторный приём заявки — новая сессия.
+
+HTTP-вызов с робота «запросить помощь» (без JWT оператора): [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md).
 
 Полная схема запросов/ответов — в **Swagger** (`/docs`). Детали протокола x402 в приложении — [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
@@ -197,7 +203,7 @@ npm run dev                  # nodemon
 - `GET /health` или `/helth` → `{ status, message?, availableMethods?, location? }`.
 - `POST /commands/dance`, `POST /commands/buy-cola` с телами согласно команде.
 - Для платных эндпоинтов — ответ **402** в формате V2 (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`).
-- Для телеопа: на роботе доступен **ROSBridge WebSocket** (часто порт **9090**) с той же LAN, откуда `raid_app` достучится до `rosbridgeHost` / `rosbridgePort`. Скрипт на роботе может вызывать **`POST /api/robots/{robotId}/teleop/help`** с секретом, заданным при регистрации робота в админке.
+- Для телеопа: на роботе доступен **ROSBridge WebSocket** (часто порт **9090**) с той же LAN, откуда `raid_app` достучится до `rosbridgeHost` / `rosbridgePort`. Скрипт на роботе может вызывать **`POST /api/robots/{robotId}/teleop/help`** с секретом, заданным при регистрации робота в админке (подробнее: [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md)). После принятия заявки оператором на исходящем соединении к rosbridge пробрасываются **id/login оператора** (см. таблицу `TELEOP_FORWARD_*` выше) — при необходимости обработайте их в прокси на роботе.
 
 Пример объекта в `availableMethods` см. в предыдущих версиях README или в `swagger.js` (`RobotHealthStatus`).
 
@@ -226,6 +232,7 @@ npm test
 ## Документация для разработчиков и ИИ-агентов
 
 - [AGENTS.md](AGENTS.md) — правила контрибуции для автоматизированных ассистентов (README, Swagger, тесты, коммиты).
+- [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` с робота (`teleop_fetch`) и связь с WS/rosbridge.
 
 ## Прочее
 

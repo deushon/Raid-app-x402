@@ -166,7 +166,7 @@ src/
     clientPaymentService.js
     settingsStore.js
     aiAgentService.js
-  middleware/auth.js
+  middleware/adminAuth.js
 ```
 
 ## Known limitations

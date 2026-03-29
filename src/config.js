@@ -1,12 +1,31 @@
+const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 const logger = require('./utils/logger');
 
+/**
+ * Load `.env` without overwriting existing process.env (same as default dotenv).
+ * Strips UTF-8 BOM if present — otherwise the first key (often ADMIN_*) is ignored by the parser.
+ */
 const loadEnvFile = () => {
   const explicitPath = process.env.DOTENV_CONFIG_PATH;
   const envPath = explicitPath || path.join(process.cwd(), '.env');
   try {
-    dotenv.config({ path: envPath });
+    if (!fs.existsSync(envPath)) {
+      logger.debug('No .env file at cwd (using process.env only)', { envPath });
+      return;
+    }
+    let raw = fs.readFileSync(envPath, 'utf8');
+    if (raw.charCodeAt(0) === 0xfeff) {
+      raw = raw.slice(1);
+      logger.warn('Removed UTF-8 BOM from .env (first variable names were ignored by the parser before)');
+    }
+    const parsed = dotenv.parse(raw);
+    for (const [key, value] of Object.entries(parsed)) {
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
     logger.debug('Environment configuration loaded', { envPath });
   } catch (error) {
     logger.warn('Failed to load environment configuration file', { error: error.message });
@@ -51,6 +70,21 @@ const toNumber = (value, fallback) => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+/** @param {string|undefined|null} value @param {boolean} defaultValue */
+const parseEnvBool = (value, defaultValue) => {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return defaultValue;
+  }
+  const s = String(value).trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(s)) {
+    return false;
+  }
+  if (['1', 'true', 'yes', 'on'].includes(s)) {
+    return true;
+  }
+  return defaultValue;
+};
+
 const loadConfig = (argv = []) => {
   loadEnvFile();
   const args = parseArgs(argv);
@@ -75,6 +109,25 @@ const loadConfig = (argv = []) => {
   } else if (cookieSecureRaw === 'false' || cookieSecureRaw === '0' || cookieSecureRaw === 'never') {
     teleoperatorCookieSecureMode = 'never';
   }
+
+  const adminCookieSecureRaw = (
+    process.env.ADMIN_COOKIE_SECURE || process.env.TELEOPERATOR_COOKIE_SECURE || 'auto'
+  ).toLowerCase();
+  let adminCookieSecureMode = 'auto';
+  if (adminCookieSecureRaw === 'true' || adminCookieSecureRaw === '1' || adminCookieSecureRaw === 'always') {
+    adminCookieSecureMode = 'always';
+  } else if (
+    adminCookieSecureRaw === 'false'
+    || adminCookieSecureRaw === '0'
+    || adminCookieSecureRaw === 'never'
+  ) {
+    adminCookieSecureMode = 'never';
+  }
+
+  const adminSessionSecret =
+    process.env.ADMIN_SESSION_SECRET
+    || process.env.TELEOPERATOR_JWT_SECRET
+    || (process.env.NODE_ENV === 'production' ? null : 'dev-admin-session-secret');
 
   return {
     server: {
@@ -159,6 +212,27 @@ const loadConfig = (argv = []) => {
       enabled: process.env.TELEOP_WS_ENABLED !== '0' && process.env.TELEOP_WS_ENABLED !== 'false',
       maxMessageBytes: toNumber(process.env.TELEOP_MAX_MESSAGE_BYTES, 16 * 1024 * 1024),
       rosbridgeConnectTimeoutMs: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS, 10000),
+      /** Исходящий WS к rosbridge: передать id/login телеоператора (заголовки и/или query). */
+      forwardOperatorHeaders: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_HEADERS, true),
+      forwardOperatorQuery: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_QUERY, true),
+    },
+    admin: {
+      username: (() => {
+        const v = process.env.ADMIN_USERNAME;
+        if (v === undefined || v === null) return 'admin';
+        const t = String(v).trim();
+        return t || 'admin';
+      })(),
+      password: (() => {
+        const v = process.env.ADMIN_PASSWORD;
+        if (v === undefined || v === null) return 'admin';
+        const t = String(v).trim();
+        return t || 'admin';
+      })(),
+      sessionSecret: adminSessionSecret,
+      jwtExpiresIn: process.env.ADMIN_SESSION_EXPIRES_IN || '8h',
+      cookieName: 'admin_session',
+      cookieSecureMode: adminCookieSecureMode,
     },
   };
 };

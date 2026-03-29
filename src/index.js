@@ -16,7 +16,10 @@ const createClientRouter = require('./routes/client');
 const createAdminRouter = require('./routes/admin');
 const createTeleoperatorRouter = require('./routes/teleoperator');
 const createX402PaymentMiddleware = require('./middleware/x402Payment');
-const createAuthMiddleware = require('./middleware/auth');
+const {
+  createAdminUiGuardMiddleware,
+  warnDefaultAdminPassword,
+} = require('./middleware/adminAuth');
 const {
   createAttachTeleopUser,
   createRequireTeleopSession,
@@ -32,6 +35,17 @@ const settingsStore = require('./services/settingsStore');
 const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
   const { server } = config;
+
+  if (process.env.NODE_ENV === 'production' && !config.admin.sessionSecret) {
+    logger.error(
+      'ADMIN_SESSION_SECRET or TELEOPERATOR_JWT_SECRET is required in production for admin session signing',
+    );
+    process.exit(1);
+  }
+  warnDefaultAdminPassword(config.admin);
+  logger.info('Admin panel /ui login: use ADMIN_USERNAME / ADMIN_PASSWORD (not teleoperator DB login)', {
+    adminUsername: config.admin.username,
+  });
 
   if (server.host === '127.0.0.1' || server.host === '::1') {
     logger.warn(
@@ -89,8 +103,14 @@ const bootstrap = async () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Admin panel (auth required)
-  app.use('/ui', createAuthMiddleware(), express.static(path.join(__dirname, '..', 'public')));
+  // Admin panel: cookie session (login page) + optional Basic on /api/admin only
+  // Do not register app.get('/ui') → redirect to '/ui/': in Express 5 that route also matches
+  // GET /ui/ and causes an infinite 302 loop. Trailing slash is handled by express.static (301 /ui → /ui/).
+  app.use(
+    '/ui',
+    createAdminUiGuardMiddleware(config.admin),
+    express.static(path.join(__dirname, '..', 'public')),
+  );
 
   // Public client UI
   app.use('/client', express.static(path.join(__dirname, '..', 'public', 'client')));
@@ -198,7 +218,7 @@ const bootstrap = async () => {
     getSettings: settingsStore.getSettings,
     saveSettings: settingsStore.saveSettings,
   }));
-  app.use('/api/admin', createAuthMiddleware(), createAdminRouter({ settingsStore }));
+  app.use('/api/admin', createAdminRouter({ settingsStore, adminConfig: config.admin }));
 
   /**
    * @openapi

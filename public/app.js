@@ -14,12 +14,19 @@ let markersLayer = null;
 const api = {
   async request(path, options = {}) {
     const response = await fetch(path, {
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
       ...options,
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
+
+    if (response.status === 401 && path.startsWith('/api/admin')) {
+      const next = `${location.pathname}${location.search || ''}`;
+      window.location.href = `/ui/login.html?next=${encodeURIComponent(next)}`;
+      throw new Error('Session expired');
+    }
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -49,6 +56,7 @@ const api = {
   deleteRobot(id) {
     return fetch(`/api/robots/${id}`, {
       method: 'DELETE',
+      credentials: 'include',
     });
   },
 
@@ -479,6 +487,15 @@ if (rpcSettingsForm) {
     }
   });
 }
+
+document.getElementById('admin-logout')?.addEventListener('click', async () => {
+  try {
+    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+  } catch {
+    // still leave panel
+  }
+  window.location.href = '/ui/login.html';
+});
 
 setInterval(renderRobots, 15000);
 initMap();
