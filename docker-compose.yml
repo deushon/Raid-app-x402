@@ -1,11 +1,14 @@
 # Full stack: PostgreSQL + Node app. Фон: restart: unless-stopped.
 # Запуск: docker compose up -d --build
-# Остановка: docker compose down
+# Остановка: docker compose down (данные Postgres в именованном томе x402_raid_pgdata сохраняются; удалить том: docker compose down -v)
 # Логи: docker compose logs -f app
 #
 # В контейнере приложения DATABASE_URL указывает на сервис postgres (порт 5432 внутри сети).
 # Остальное из .env (ключи Solana, TELEOPERATOR_JWT_SECRET, ADMIN_*, и т.д.).
 # Персистентные JSON в config/ монтируются в контейнер.
+
+volumes:
+  x402_raid_pgdata:
 
 services:
   postgres:
@@ -15,6 +18,8 @@ services:
       POSTGRES_USER: x402
       POSTGRES_PASSWORD: x402
       POSTGRES_DB: x402raid
+    volumes:
+      - x402_raid_pgdata:/var/lib/postgresql/data
     # Только с самого сервера (127.0.0.1). Приложение в Docker ходит в БД по имени postgres:5432.
     ports:
       - "127.0.0.1:5434:5432"

@@ -7,7 +7,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **x402 V2** при вызовах роботов: первый запрос → **402** с `accepts[]` → оплата (шлюз или прямой Solana) → повтор с заголовком **X-X402-Reference** (см. [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md)).
 - Провайдеры оплат: внешний x402 gateway или **solana-direct** (`@solana/web3.js`).
 - Мониторинг здоровья роботов: опрос `/health` и legacy `/helth` (x402 при необходимости).
-- Реестр роботов в памяти: статус, методы, координаты.
+- Реестр роботов: при **`DATABASE_URL`** записи хранятся в PostgreSQL (таблица **`robots`**) и поднимаются после перезапуска; **статус health** по-прежнему в памяти процесса и обновляется опросом робота. Без **`DATABASE_URL`** реестр только в RAM (как раньше).
 - **Command router**: `dance`, `buy-cola` с выбором исполнителя (цена, порядок, случайно / ближайший к точке).
 - **Режим RAID для клиента**: выбор робота через **AIAgentService** (стратегии или webhook **n8n**), настраивается в админке.
 - **ClientPaymentService**: проверка Solana-транзакции и задел под refund при сбое выполнения.
@@ -22,7 +22,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - Node.js 18+
 - npm 9+
 - Для защищённых роботов и серверных оплат: `X402_PRIVATE_KEY` (и при необходимости ключ для Solana).
-- Для телеоператора и **телеоп-прокси**: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*`, **`/api/.../teleop/help`**, UI `/teleoperator` и WebSocket телеопа **не подключаются**.
+- Для телеоператора, **персистентного реестра роботов**, **телеоп-прокси**: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*`, **`/api/.../teleop/help`**, UI `/teleoperator` и WebSocket телеопа **не подключаются**, а роботы **не сохраняются** между перезапусками приложения.
 
 ### Установка и запуск
 
@@ -37,6 +37,7 @@ docker compose up -d --build
 - API и UI доступны **по сети с любой машины** (если firewall пускает): `**http://<IP-или-DNS-сервера>:3000`**. Порт на хосте: `APP_HOST_PORT` (по умолчанию 3000), публикация `**0.0.0.0**` (все интерфейсы).
 - Внутри compose для приложения `**DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
 - Каталог `**config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
+- Данные **PostgreSQL** лежат в именованном томе **`x402_raid_pgdata`** (роботы, телеоператоры, заявки помощи переживают пересборку контейнеров). Полное удаление данных: `docker compose down -v`.
 - Логи: `docker compose logs -f app`
 - Остановка: `docker compose down`
 
@@ -108,7 +109,7 @@ npm run dev                  # nodemon
 
 | Переменная                    | Описание                                                                                                                                                                                                  |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | URI подключения PostgreSQL. Без неё телеоператор отключён.                                                                                                                                                |
+| `DATABASE_URL`                | URI подключения PostgreSQL. Без неё телеоператор отключён, **роботы не персистятся**. Таблица **`robots`** создаётся автоматически при старте (как и схемы телеоператора).                                  |
 | `TELEOPERATOR_JWT_SECRET`     | Секрет подписи JWT (**обязателен**, если задан `DATABASE_URL`). В dev при отсутствии env используется небезопасный дефолт (см. `src/config.js`); в `NODE_ENV=production` без секрета процесс не стартует. |
 | `TELEOPERATOR_JWT_EXPIRES_IN` | Срок JWT (например `7d`, `24h`). По умолчанию `7d`.                                                                                                                                                       |
 | `TELEOPERATOR_BCRYPT_ROUNDS`  | Стоимость bcrypt (по умолчанию `10`).                                                                                                                                                                     |
@@ -116,7 +117,11 @@ npm run dev                  # nodemon
 | `TRUST_PROXY`                 | Если приложение за reverse proxy: `1` или число хопов; нужно для корректного **auto** Secure и `req.secure`.                                                                                               |
 | `TELEOP_WS_ENABLED`           | `false` или `0` — отключить обработчик WebSocket телеопа (REST заявок остаётся при `DATABASE_URL`). По умолчанию включено.                                                                              |
 | `TELEOP_MAX_MESSAGE_BYTES`    | Лимит размера кадра WS в байтах (по умолчанию 16 MiB).                                                                                                                                                     |
-| `TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS` | Таймаут подключения сервера к rosbridge на роботе (мс).                                                                                                                                            |
+| `TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS` | Таймаут **одной** попытки открыть исходящий WS к rosbridge (мс).                                                                                                                                       |
+| `TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS`   | Сколько таких попыток подряд с паузой **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`** перед отказом (по умолчанию **3**).                                                                                      |
+| `TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS` | Пауза между попытками (мс), по умолчанию **2000**.                                                                                                                                                       |
+| `TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS` | После **уже установленного** соединения с rosbridge, при обрыве: сколько раз сервер снова пройдёт полный цикл попыток (см. выше), пока клиентский WS к Raid ещё открыт (по умолчанию **3**). После исчерпания — **1011** клиенту. |
+| `TELEOP_SESSION_END_GRACE_MS`         | После отключения оператора от `/ws/teleop/session/...` или после окончательного падения rosbridge: через столько **мс** закрыть строку в **`teleop_sessions`** (по умолчанию **120000**). Пока сессия в БД не закрыта, можно снова подключиться **с тем же `sessionId` и JWT**. **`0`** — закрывать сессию в БД сразу (старое поведение). |
 | `TELEOP_FORWARD_OPERATOR_HEADERS` | `true` / `false` (по умолчанию `true`; выключают также `0`, `false`, `no`, `off`). Исходящий WS **raid_app → rosbridge**: заголовки **`X-Teleoperator-Id`** и при наличии логина **`X-Teleoperator-Login`**. |
 | `TELEOP_FORWARD_OPERATOR_QUERY`   | `true` / `false` (по умолчанию `true`). К URL подключения к rosbridge добавляются query **`teleoperator_id`** и при наличии логина **`teleoperator_login`**. Если rosbridge/прокси ломается на `?…`, поставьте `false`. |
 
@@ -130,7 +135,7 @@ npm run dev                  # nodemon
 | Метод            | Путь                       | Описание                                 |
 | ---------------- | -------------------------- | ---------------------------------------- |
 | `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`** |
-| `GET` / `POST`   | `/api/robots`              | Список / регистрация в **памяти процесса** (после перезапуска список пуст). В ответе сейчас есть **`teleopSecret`** (чувствительные данные; позже может быть скрыт). Тело регистрации: опционально `rosbridgeHost`, `rosbridgePort`, `teleopSecret`. **Примеры в Swagger** (`Robo-1`, фиксированный UUID) — только документация; живые данные — то, что вы зарегистрировали (например `test1`). |
+| `GET` / `POST`   | `/api/robots`              | Список / регистрация. При **`DATABASE_URL`** список **сохраняется в PostgreSQL** и восстанавливается после рестарта; без БД — только в памяти процесса. В ответе сейчас есть **`teleopSecret`**. Тело: опционально `rosbridgeHost`, `rosbridgePort`, `teleopSecret`. **Примеры в Swagger** — иллюстрация, не живые данные. |
 | `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление                    |
 | `POST`           | `/api/robots/{id}/refresh` | Принудительный health-check              |
 
@@ -192,7 +197,7 @@ npm run dev                  # nodemon
    - `ws(s)://<host>:<port>/ws/teleop/session/<sessionId>?token=<URL-encoded JWT>`
    - После подключения передавайте **те же текстовые кадры JSON**, что при прямом ROSBridge WebSocket (например `op: subscribe`, `op: publish`).
 5. **Что видит робот при активной сессии:** с хоста `raid_app` к `ws://rosbridgeHost:rosbridgePort` уходит **второй** WebSocket (сервер → rosbridge). В нём по умолчанию передаются **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** — чтобы на стороне робота (nginx, обёртка, логирование) было известно, **какой оператор** ведёт сессию. Отключение: **`TELEOP_FORWARD_OPERATOR_HEADERS`**, **`TELEOP_FORWARD_OPERATOR_QUERY`**. Стандартный rosbridge эти поля может не интерпретировать.
-6. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. При обрыве операторского сокета сессия в БД завершается, повторный приём заявки — новая сессия.
+6. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. **Время жизни JWT оператора** задаётся **`TELEOPERATOR_JWT_EXPIRES_IN`** (например `7d`). **Строка сессии телеопа в БД** после обрыва WS остаётся активной на время **`TELEOP_SESSION_END_GRACE_MS`**, затем закрывается (можно снова открыть тот же URL с тем же `sessionId`, пока не истёк grace и JWT). Переподключение **raid_app → rosbridge** при кратковременных сбоях — см. **`TELEOP_ROSBRIDGE_*_ATTEMPTS`** и **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**. Код **1011** / причина **`Rosbridge error`** чаще всего означает, что с хоста Raid не удаётся устойчиво держать WS к **`rosbridgeHost:rosbridgePort`** (сеть, rosbridge не запущен, прокси режет заголовки/query — попробуйте **`TELEOP_FORWARD_OPERATOR_*`**).
 
 HTTP-вызов с робота «запросить помощь» (без JWT оператора): [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md).
 

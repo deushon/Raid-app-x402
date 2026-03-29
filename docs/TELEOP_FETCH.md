@@ -97,6 +97,8 @@ ws://192.168.1.10:9090?teleoperator_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890&tele
 
 Пустые значения env оставляют **поведение по умолчанию** (включено). Реализация: **`buildRosbridgeWebSocketTarget`** в [`src/ws/teleopServer.js`](../src/ws/teleopServer.js), флаги в [`src/config.js`](../src/config.js) (`forwardOperatorHeaders` / `forwardOperatorQuery`).
 
+**Переподключения и «жизнь» сессии WS** (тот же файл `teleopServer.js` + env в README): **`TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS`**, **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**, **`TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS`**, **`TELEOP_SESSION_END_GRACE_MS`**. JWT оператора по-прежнему **`TELEOPERATOR_JWT_EXPIRES_IN`**.
+
 ---
 
 ## Сеть и безопасность

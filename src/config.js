@@ -212,6 +212,21 @@ const loadConfig = (argv = []) => {
       enabled: process.env.TELEOP_WS_ENABLED !== '0' && process.env.TELEOP_WS_ENABLED !== 'false',
       maxMessageBytes: toNumber(process.env.TELEOP_MAX_MESSAGE_BYTES, 16 * 1024 * 1024),
       rosbridgeConnectTimeoutMs: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS, 10000),
+      /** Попыток открыть исходящий WS к rosbridge (каждая попытка с таймаутом rosbridgeConnectTimeoutMs). */
+      rosbridgeConnectAttempts: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS, 3),
+      /** Пауза между попытками (мс). */
+      rosbridgeReconnectDelayMs: toNumber(process.env.TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS, 2000),
+      /**
+       * После обрыва уже открытого rosbridge — сколько раз сервер снова пройдёт цикл подключений
+       * (по rosbridgeConnectAttempts попыток с паузой) пока клиентский WS к Raid ещё открыт.
+       */
+      rosbridgeDropReconnectAttempts: toNumber(process.env.TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS, 3),
+      /**
+       * После отключения оператора от /ws/teleop/session/... или после окончательного падения rosbridge:
+       * через столько мс закрыть сессию в БД (можно снова подключиться с тем же sessionId и JWT).
+       * 0 — закрывать сессию в БД сразу (старое поведение).
+       */
+      sessionEndGraceMs: toNumber(process.env.TELEOP_SESSION_END_GRACE_MS, 120000),
       /** Исходящий WS к rosbridge: передать id/login телеоператора (заголовки и/или query). */
       forwardOperatorHeaders: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_HEADERS, true),
       forwardOperatorQuery: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_QUERY, true),

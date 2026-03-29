@@ -26,6 +26,8 @@ const {
 } = require('./middleware/teleopSession');
 const { ensureTeleoperatorSchema } = require('./db/ensureTeleoperatorSchema');
 const { ensureTeleopHelpSchema } = require('./db/ensureTeleopHelpSchema');
+const { ensureRobotSchema } = require('./db/ensureRobotSchema');
+const { createRobotRepository } = require('./services/robotRepository');
 const createTeleopHelpRouter = require('./routes/teleopHelp');
 const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
 const { attachTeleopWebSockets } = require('./ws/teleopServer');
@@ -65,8 +67,9 @@ const bootstrap = async () => {
     try {
       await ensureTeleoperatorSchema(pool);
       await ensureTeleopHelpSchema(pool);
+      await ensureRobotSchema(pool);
     } catch (error) {
-      logger.error('Failed to ensure teleoperator schema', { error: error.message });
+      logger.error('Failed to ensure database schema', { error: error.message });
       await pool.end().catch(() => {});
       process.exit(1);
     }
@@ -78,7 +81,9 @@ const bootstrap = async () => {
 
   const x402Service = new X402Service(config.x402);
   const healthMonitor = createHealthMonitor({ config, x402Service });
-  const registry = new RobotRegistry({ healthMonitor });
+  const robotRepository = pool ? createRobotRepository(pool) : null;
+  const registry = new RobotRegistry({ healthMonitor, robotRepository });
+  await registry.loadFromPersistence();
   const commandRouter = createCommandRouter({ config, registry, x402Service });
   const teleopHub = pool ? createTeleopOperatorHub() : null;
 
@@ -192,6 +197,10 @@ const bootstrap = async () => {
    *                 x402Configured:
    *                   type: boolean
    *                   example: true
+   *                 teleoperatorEnabled:
+   *                   type: boolean
+   *                   description: PostgreSQL pool active (DATABASE_URL); teleoperator REST and teleop/help routes mounted when true
+   *                   example: true
    *                 teleopWs:
    *                   type: boolean
    *                   description: WebSocket teleop upgrade handler enabled (DATABASE_URL + TELEOP_WS_ENABLED)
@@ -203,6 +212,7 @@ const bootstrap = async () => {
       timestamp: new Date().toISOString(),
       robots: registry.list().length,
       x402Configured: x402Service.isConfigured(),
+      teleoperatorEnabled: Boolean(pool),
       teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
     });
   });
@@ -292,6 +302,17 @@ const bootstrap = async () => {
       x402Configured: x402Service.isConfigured(),
       teleoperatorEnabled: Boolean(pool),
       teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
+      robotsPersisted: Boolean(robotRepository),
+    });
+    setImmediate(() => {
+      for (const robot of registry.list()) {
+        registry.refreshRobot(robot.id).catch((error) => {
+          logger.debug('Background robot health refresh failed', {
+            robotId: robot.id,
+            error: error.message,
+          });
+        });
+      }
     });
   });
 

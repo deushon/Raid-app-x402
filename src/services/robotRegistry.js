@@ -1,10 +1,31 @@
 const { v4: uuid } = require('uuid');
 const logger = require('../utils/logger');
+const { rowToRobot } = require('./robotRepository');
 
 class RobotRegistry {
-  constructor({ healthMonitor }) {
+  /**
+   * @param {{ healthMonitor: object, robotRepository?: ReturnType<import('./robotRepository').createRobotRepository> | null }} deps
+   */
+  constructor({ healthMonitor, robotRepository = null }) {
     this.healthMonitor = healthMonitor;
+    this.robotRepository = robotRepository || null;
     this.robots = new Map();
+  }
+
+  /**
+   * Load robots from PostgreSQL when robotRepository is configured (call once at startup).
+   */
+  async loadFromPersistence() {
+    if (!this.robotRepository) {
+      return;
+    }
+    const rows = await this.robotRepository.listAll();
+    this.robots.clear();
+    for (const row of rows) {
+      const robot = rowToRobot(row);
+      this.robots.set(robot.id, robot);
+    }
+    logger.info('Robots loaded from database', { count: rows.length });
   }
 
   list() {
@@ -42,11 +63,15 @@ class RobotRegistry {
         state: 'unknown',
         message: 'Awaiting first health check',
         availableMethods: [],
+        secure: false,
       },
       lastHealthCheckAt: null,
       location: null,
     };
 
+    if (this.robotRepository) {
+      await this.robotRepository.insert(robot);
+    }
     this.robots.set(id, robot);
     logger.info('Robot registered', { id, host, port, requiresX402 });
 
@@ -88,7 +113,13 @@ class RobotRegistry {
     return robot;
   }
 
-  removeRobot(robotId) {
+  async removeRobot(robotId) {
+    if (!this.getById(robotId)) {
+      return false;
+    }
+    if (this.robotRepository) {
+      await this.robotRepository.deleteById(robotId);
+    }
     return this.robots.delete(robotId);
   }
 
@@ -96,7 +127,7 @@ class RobotRegistry {
     return this.list().filter((robot) => robot.status.state === state);
   }
 
-  updateRobot(robotId, updates) {
+  async updateRobot(robotId, updates) {
     const robot = this.getById(robotId);
     if (!robot) {
       throw new Error('Robot not found');
@@ -127,9 +158,11 @@ class RobotRegistry {
     }
 
     this.robots.set(robotId, merged);
+    if (this.robotRepository) {
+      await this.robotRepository.updateStatic(merged);
+    }
     return merged;
   }
 }
 
 module.exports = RobotRegistry;
-

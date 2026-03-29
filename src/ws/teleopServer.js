@@ -1,4 +1,6 @@
-const { WebSocketServer, WebSocket } = require('ws');
+const WebSocketLib = require('ws');
+const WebSocket = WebSocketLib;
+const WebSocketServer = WebSocketLib.WebSocketServer || WebSocketLib.Server;
 const logger = require('../utils/logger');
 const { verifyTeleopToken } = require('../middleware/teleopSession');
 const {
@@ -42,6 +44,68 @@ function buildRosbridgeWebSocketTarget({ rosHost, rosPort, user, teleopCfg }) {
 }
 
 /**
+ * Одна попытка открыть исходящий WS к rosbridge (до события open или таймаута / error).
+ * @param {string} rosUrl
+ * @param {import('ws').ClientOptions | null} wsOptions
+ * @param {number} connectTimeoutMs
+ * @returns {Promise<import('ws').WebSocket>}
+ */
+function openRosbridgeOnce(rosUrl, wsOptions, connectTimeoutMs) {
+  return new Promise((resolve, reject) => {
+    let sock;
+    try {
+      sock = wsOptions ? new WebSocket(rosUrl, wsOptions) : new WebSocket(rosUrl);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      try {
+        sock.close();
+      } catch {
+        /* ignore */
+      }
+      reject(new Error('Rosbridge connect timeout'));
+    }, connectTimeoutMs);
+
+    const done = (err) => {
+      clearTimeout(timeout);
+      if (err) {
+        try {
+          sock.close();
+        } catch {
+          /* ignore */
+        }
+        reject(err);
+      } else {
+        resolve(sock);
+      }
+    };
+
+    sock.once('open', () => done(null));
+    sock.once('error', (err) => done(err || new Error('Rosbridge error')));
+  });
+}
+
+/**
+ * Несколько попыток подключения к rosbridge с паузой между ними.
+ */
+async function openRosbridgeWithRetries(rosUrl, wsOptions, connectTimeoutMs, attempts, delayMs) {
+  let lastErr = new Error('Rosbridge connect failed');
+  for (let i = 0; i < attempts; i += 1) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    try {
+      return await openRosbridgeOnce(rosUrl, wsOptions, connectTimeoutMs);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * @param {import('http').Server} httpServer
  * @param {{ config: object, pool: import('pg').Pool, registry: object, teleopHub: object }} deps
  */
@@ -56,6 +120,27 @@ function attachTeleopWebSockets(httpServer, deps) {
 
   const wss = new WebSocketServer({ noServer: true });
   const reservedProxySessions = new Set();
+  /** @type {Map<string, ReturnType<typeof setTimeout>>} */
+  const sessionGraceTimers = new Map();
+
+  function clearSessionGraceTimer(sessionId) {
+    const t = sessionGraceTimers.get(sessionId);
+    if (t) {
+      clearTimeout(t);
+      sessionGraceTimers.delete(sessionId);
+    }
+  }
+
+  function scheduleSessionGraceEnd(sessionId, graceMs) {
+    clearSessionGraceTimer(sessionId);
+    const timer = setTimeout(() => {
+      sessionGraceTimers.delete(sessionId);
+      endTeleopSession(pool, sessionId).catch((error) => {
+        logger.error('endTeleopSession (grace) failed', { error: error.message, sessionId });
+      });
+    }, graceMs);
+    sessionGraceTimers.set(sessionId, timer);
+  }
 
   httpServer.on('upgrade', (request, socket, head) => {
     const host = request.headers.host || 'localhost';
@@ -113,6 +198,8 @@ function attachTeleopWebSockets(httpServer, deps) {
           registry,
           teleopCfg,
           reservedProxySessions,
+          clearSessionGraceTimer,
+          scheduleSessionGraceEnd,
         });
       });
       return;
@@ -123,38 +210,100 @@ function attachTeleopWebSockets(httpServer, deps) {
 
   logger.info('Teleop WebSocket upgrade handler attached', {
     paths: ['/ws/teleoperator', '/ws/teleop/session/:sessionId'],
+    sessionEndGraceMs: teleopCfg.sessionEndGraceMs,
+    rosbridgeConnectAttempts: teleopCfg.rosbridgeConnectAttempts,
+    rosbridgeDropReconnectAttempts: teleopCfg.rosbridgeDropReconnectAttempts,
   });
 }
 
 function handleProxySession(ws, ctx) {
   const {
-    sessionId, user, pool, registry, teleopCfg, reservedProxySessions,
+    sessionId,
+    user,
+    pool,
+    registry,
+    teleopCfg,
+    reservedProxySessions,
+    clearSessionGraceTimer,
+    scheduleSessionGraceEnd,
   } = ctx;
+
+  const maxBytes = teleopCfg.maxMessageBytes;
+  const connectTimeout = teleopCfg.rosbridgeConnectTimeoutMs;
+  const connectAttempts = teleopCfg.rosbridgeConnectAttempts;
+  const retryDelay = teleopCfg.rosbridgeReconnectDelayMs;
+  const dropWaves = teleopCfg.rosbridgeDropReconnectAttempts;
+  const graceMs = teleopCfg.sessionEndGraceMs;
 
   let cleaned = false;
   let robotWs = null;
+  let bridgeEverOpened = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let reconnectTimer = null;
 
-  const cleanupOnce = async () => {
+  const physicalCleanup = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    reservedProxySessions.delete(sessionId);
+    if (robotWs) {
+      try {
+        robotWs.removeAllListeners();
+        robotWs.close();
+      } catch {
+        /* ignore */
+      }
+      robotWs = null;
+    }
+  };
+
+  /**
+   * @param {{ immediateEndDb?: boolean, closeClient?: boolean, closeCode?: number, closeReason?: string }} opts
+   */
+  const finalizeSession = (opts = {}) => {
+    const {
+      immediateEndDb = false,
+      closeClient = false,
+      closeCode = 1011,
+      closeReason = 'Session ended',
+    } = opts;
     if (cleaned) {
       return;
     }
     cleaned = true;
-    reservedProxySessions.delete(sessionId);
-    try {
-      if (robotWs && robotWs.readyState === WebSocket.OPEN) {
-        robotWs.close();
-      } else if (robotWs) {
-        robotWs.close();
-      }
-    } catch {
-      /* ignore */
+    physicalCleanup();
+    const endNow = immediateEndDb || graceMs <= 0;
+    if (endNow) {
+      clearSessionGraceTimer(sessionId);
+      endTeleopSession(pool, sessionId).catch((error) => {
+        logger.error('endTeleopSession failed', { error: error.message, sessionId });
+      });
+    } else {
+      scheduleSessionGraceEnd(sessionId, graceMs);
     }
-    try {
-      await endTeleopSession(pool, sessionId);
-    } catch (error) {
-      logger.error('endTeleopSession failed', { error: error.message, sessionId });
+    if (closeClient && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.close(closeCode, closeReason);
+      } catch {
+        /* ignore */
+      }
     }
   };
+
+  async function establishRobotLink() {
+    return openRosbridgeWithRetries(
+      rosUrl,
+      wsOptions,
+      connectTimeout,
+      connectAttempts,
+      retryDelay,
+    );
+  }
+
+  let rosUrl = '';
+  /** @type {import('ws').ClientOptions | null} */
+  let wsOptions = null;
 
   (async () => {
     const row = await getActiveSessionForOperator(pool, {
@@ -171,6 +320,7 @@ function handleProxySession(ws, ctx) {
       return;
     }
     reservedProxySessions.add(sessionId);
+    clearSessionGraceTimer(sessionId);
 
     const robot = registry.getById(row.robot_id);
     if (!robot) {
@@ -181,56 +331,144 @@ function handleProxySession(ws, ctx) {
 
     const rosHost = robot.rosbridgeHost || robot.host;
     const rosPort = robot.rosbridgePort != null ? robot.rosbridgePort : 9090;
-    const { url: rosUrl, wsOptions } = buildRosbridgeWebSocketTarget({
+    const built = buildRosbridgeWebSocketTarget({
       rosHost,
       rosPort,
       user,
       teleopCfg,
     });
-    const maxBytes = teleopCfg.maxMessageBytes;
-    const connectTimeout = teleopCfg.rosbridgeConnectTimeoutMs;
+    rosUrl = built.url;
+    wsOptions = built.wsOptions;
 
-    try {
-      robotWs = wsOptions ? new WebSocket(rosUrl, wsOptions) : new WebSocket(rosUrl);
-    } catch (error) {
-      logger.error('robot WebSocket create failed', { error: error.message, rosUrl });
-      reservedProxySessions.delete(sessionId);
-      ws.close(1011, 'Robot connection failed');
-      return;
-    }
+    /** Сколько циклов переподключения к rosbridge осталось после обрыва (после успешного open сбрасывается в dropWaves). */
+    let reconnectAttemptsLeft = 0;
 
-    const timeout = setTimeout(() => {
-      if (robotWs && robotWs.readyState !== WebSocket.OPEN) {
+    const onRobotSideDead = () => {
+      if (cleaned) {
+        return;
+      }
+      if (robotWs) {
+        try {
+          robotWs.removeAllListeners();
+        } catch {
+          /* ignore */
+        }
         try {
           robotWs.close();
         } catch {
           /* ignore */
         }
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1011, 'Rosbridge connect timeout');
-        }
-        cleanupOnce();
+        robotWs = null;
       }
-    }, connectTimeout);
-
-    robotWs.on('open', () => {
-      clearTimeout(timeout);
-    });
-
-    robotWs.on('message', (data, isBinary) => {
       if (ws.readyState !== WebSocket.OPEN) {
+        finalizeSession({ immediateEndDb: !bridgeEverOpened });
         return;
       }
-      const len = typeof data === 'string' ? Buffer.byteLength(data) : data.length;
-      if (len > maxBytes) {
+      if (reconnectAttemptsLeft <= 0) {
+        finalizeSession({
+          immediateEndDb: !bridgeEverOpened,
+          closeClient: true,
+          closeCode: 1011,
+          closeReason: 'Rosbridge error',
+        });
+        return;
+      }
+      reconnectAttemptsLeft -= 1;
+      logger.info('rosbridge reconnect scheduled', { sessionId, reconnectAttemptsLeft });
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        runReconnectWave().catch((error) => {
+          logger.error('runReconnectWave failed', { error: error.message, sessionId });
+          finalizeSession({
+            immediateEndDb: !bridgeEverOpened,
+            closeClient: true,
+            closeCode: 1011,
+            closeReason: 'Rosbridge error',
+          });
+        });
+      }, retryDelay);
+    };
+
+    const wireDuplex = () => {
+      if (!robotWs || cleaned) {
+        return;
+      }
+      let deadOnce = false;
+      const onDead = (err) => {
+        if (deadOnce) {
+          return;
+        }
+        deadOnce = true;
+        if (err) {
+          logger.warn('robot bridge socket error', { error: err.message, sessionId });
+        }
+        try {
+          robotWs.removeAllListeners();
+        } catch {
+          /* ignore */
+        }
+        try {
+          robotWs.close();
+        } catch {
+          /* ignore */
+        }
+        robotWs = null;
+        onRobotSideDead();
+      };
+
+      robotWs.on('message', (data, isBinary) => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        const len = typeof data === 'string' ? Buffer.byteLength(data) : data.length;
+        if (len > maxBytes) {
+          return;
+        }
+        try {
+          ws.send(data, { binary: isBinary });
+        } catch {
+          /* ignore */
+        }
+      });
+
+      robotWs.once('error', (err) => onDead(err));
+      robotWs.once('close', () => onDead(null));
+    };
+
+    async function runReconnectWave() {
+      if (cleaned || ws.readyState !== WebSocket.OPEN) {
         return;
       }
       try {
-        ws.send(data, { binary: isBinary });
-      } catch {
-        /* ignore */
+        robotWs = await establishRobotLink();
+        bridgeEverOpened = true;
+        reconnectAttemptsLeft = dropWaves;
+        wireDuplex();
+      } catch (error) {
+        logger.warn('rosbridge reconnect wave failed', { sessionId, message: error.message });
+        onRobotSideDead();
       }
-    });
+    }
+
+    try {
+      robotWs = await establishRobotLink();
+    } catch (error) {
+      logger.warn('rosbridge initial connect failed', { sessionId, message: error.message });
+      reservedProxySessions.delete(sessionId);
+      cleaned = true;
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1011, 'Rosbridge unreachable');
+      }
+      clearSessionGraceTimer(sessionId);
+      endTeleopSession(pool, sessionId).catch((e) => {
+        logger.error('endTeleopSession failed', { error: e.message, sessionId });
+      });
+      return;
+    }
+
+    bridgeEverOpened = true;
+    reconnectAttemptsLeft = dropWaves;
+    wireDuplex();
 
     ws.on('message', (data, isBinary) => {
       if (!robotWs || robotWs.readyState !== WebSocket.OPEN) {
@@ -247,39 +485,25 @@ function handleProxySession(ws, ctx) {
       }
     });
 
-    robotWs.on('error', (err) => {
-      clearTimeout(timeout);
-      logger.warn('robot bridge socket error', { error: err.message, sessionId });
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close(1011, 'Rosbridge error');
-      }
-      cleanupOnce();
-    });
-
-    robotWs.on('close', () => {
-      clearTimeout(timeout);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-      cleanupOnce();
-    });
-
     ws.on('close', () => {
-      clearTimeout(timeout);
-      cleanupOnce();
+      finalizeSession({ immediateEndDb: !bridgeEverOpened });
     });
 
     ws.on('error', () => {
-      clearTimeout(timeout);
-      cleanupOnce();
+      finalizeSession({ immediateEndDb: !bridgeEverOpened });
     });
   })().catch((error) => {
     logger.error('proxy session setup failed', { error: error.message, sessionId });
     if (ws.readyState === WebSocket.OPEN) {
       ws.close(1011, 'Internal error');
     }
-    cleanupOnce();
+    finalizeSession({ immediateEndDb: true });
   });
 }
 
-module.exports = { attachTeleopWebSockets, buildRosbridgeWebSocketTarget };
+module.exports = {
+  attachTeleopWebSockets,
+  buildRosbridgeWebSocketTarget,
+  openRosbridgeOnce,
+  openRosbridgeWithRetries,
+};

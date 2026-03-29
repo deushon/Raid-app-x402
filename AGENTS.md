@@ -51,6 +51,8 @@
 | [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | PostgreSQL: `help_requests`, `teleop_sessions`                    |
 | [src/services/teleopOperatorHub.js](src/services/teleopOperatorHub.js) | Рассылка JSON событий подключённым телеоператорам                    |
 | [src/db/ensureTeleopHelpSchema.js](src/db/ensureTeleopHelpSchema.js) | DDL телеоп-таблиц                                                   |
+| [src/db/ensureRobotSchema.js](src/db/ensureRobotSchema.js) | DDL таблицы **`robots`** (персистентный реестр при `DATABASE_URL`)        |
+| [src/services/robotRepository.js](src/services/robotRepository.js) | Чтение/запись роботов в PostgreSQL                                |
 | [src/middleware/adminAuth.js](src/middleware/adminAuth.js) | Сессия админки (cookie JWT), Basic опционально для `/api/admin` |
 | [src/middleware/teleopSession.js](src/middleware/teleopSession.js) | JWT/cookie сессия телеоператора                              |
 | [src/db/ensureTeleoperatorSchema.js](src/db/ensureTeleoperatorSchema.js) | DDL таблицы `teleoperators` (PostgreSQL)                         |

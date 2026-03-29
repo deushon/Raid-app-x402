@@ -11,8 +11,9 @@ const createRobotsRouter = ({ registry }) => {
    *       - Robots
    *     summary: List registered robots
    *     description: >
-   *       Returns the in-memory registry for this server process (robots you registered via POST
-   *       or that existed since last restart). OpenAPI "Example" values are documentation only, not live data.
+   *       Returns registered robots for this server. When DATABASE_URL is set, rows are loaded from
+   *       PostgreSQL on startup and survive app restarts; without DATABASE_URL the list is in-memory only.
+   *       OpenAPI "Example" values are documentation only, not live data.
    *     responses:
    *       200:
    *         description: Current robot registry.
@@ -112,11 +113,11 @@ const createRobotsRouter = ({ registry }) => {
    *       404:
    *         description: Robot not found.
    */
-  router.put('/:robotId', (req, res, next) => {
+  router.put('/:robotId', async (req, res, next) => {
     try {
       const { robotId } = req.params;
       const updates = req.body;
-      const robot = registry.updateRobot(robotId, updates);
+      const robot = await registry.updateRobot(robotId, updates);
       return res.json(robot);
     } catch (error) {
       return next(error);
@@ -142,13 +143,17 @@ const createRobotsRouter = ({ registry }) => {
    *       404:
    *         description: Robot not found.
    */
-  router.delete('/:robotId', (req, res) => {
-    const { robotId } = req.params;
-    const result = registry.removeRobot(robotId);
-    if (!result) {
-      return res.status(404).json({ error: 'Robot not found' });
+  router.delete('/:robotId', async (req, res, next) => {
+    try {
+      const { robotId } = req.params;
+      const result = await registry.removeRobot(robotId);
+      if (!result) {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
     }
-    return res.status(204).send();
   });
 
   /**
