@@ -1,4 +1,5 @@
 const path = require('path');
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -16,8 +17,15 @@ const createAdminRouter = require('./routes/admin');
 const createTeleoperatorRouter = require('./routes/teleoperator');
 const createX402PaymentMiddleware = require('./middleware/x402Payment');
 const createAuthMiddleware = require('./middleware/auth');
-const { createAttachTeleopUser } = require('./middleware/teleopSession');
+const {
+  createAttachTeleopUser,
+  createRequireTeleopSession,
+} = require('./middleware/teleopSession');
 const { ensureTeleoperatorSchema } = require('./db/ensureTeleoperatorSchema');
+const { ensureTeleopHelpSchema } = require('./db/ensureTeleopHelpSchema');
+const createTeleopHelpRouter = require('./routes/teleopHelp');
+const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
+const { attachTeleopWebSockets } = require('./ws/teleopServer');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
 
@@ -42,6 +50,7 @@ const bootstrap = async () => {
     pool = new Pool({ connectionString: config.database.url });
     try {
       await ensureTeleoperatorSchema(pool);
+      await ensureTeleopHelpSchema(pool);
     } catch (error) {
       logger.error('Failed to ensure teleoperator schema', { error: error.message });
       await pool.end().catch(() => {});
@@ -57,6 +66,7 @@ const bootstrap = async () => {
   const healthMonitor = createHealthMonitor({ config, x402Service });
   const registry = new RobotRegistry({ healthMonitor });
   const commandRouter = createCommandRouter({ config, registry, x402Service });
+  const teleopHub = pool ? createTeleopOperatorHub() : null;
 
   const app = express();
   if (config.server.trustProxy) {
@@ -67,7 +77,12 @@ const bootstrap = async () => {
       origin: true,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'X-Robot-Teleop-Secret',
+      ],
     }),
   );
   app.use(cookieParser());
@@ -111,6 +126,17 @@ const bootstrap = async () => {
     });
     app.use('/teleoperator', express.static(teleoperatorPublicRoot));
     app.use('/api/teleoperator', createTeleoperatorRouter({ pool, config }));
+
+    app.use(
+      '/api',
+      createTeleopHelpRouter({
+        pool,
+        registry,
+        teleopHub,
+        attachTeleopUser,
+        requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
+      }),
+    );
   }
 
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
@@ -146,6 +172,10 @@ const bootstrap = async () => {
    *                 x402Configured:
    *                   type: boolean
    *                   example: true
+   *                 teleopWs:
+   *                   type: boolean
+   *                   description: WebSocket teleop upgrade handler enabled (DATABASE_URL + TELEOP_WS_ENABLED)
+   *                   example: true
    */
   app.get('/health', (req, res) => {
     res.json({
@@ -153,6 +183,7 @@ const bootstrap = async () => {
       timestamp: new Date().toISOString(),
       robots: registry.list().length,
       x402Configured: x402Service.isConfigured(),
+      teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
     });
   });
 
@@ -223,12 +254,24 @@ const bootstrap = async () => {
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  const serverInstance = app.listen(server.port, server.host, () => {
+  const httpServer = http.createServer(app);
+
+  if (pool && teleopHub && config.teleop?.enabled) {
+    attachTeleopWebSockets(httpServer, {
+      config,
+      pool,
+      registry,
+      teleopHub,
+    });
+  }
+
+  const serverInstance = httpServer.listen(server.port, server.host, () => {
     logger.info('x402 Raid App server started', {
       host: server.host,
       port: server.port,
       x402Configured: x402Service.isConfigured(),
       teleoperatorEnabled: Boolean(pool),
+      teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
     });
   });
 

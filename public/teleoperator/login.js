@@ -47,6 +47,14 @@ function initTeleopLogin() {
       return;
     }
 
+    if (data.accessToken) {
+      try {
+        sessionStorage.setItem('teleop_access_token', data.accessToken);
+      } catch {
+        /* ignore */
+      }
+    }
+
     window.location.assign(nextUrl);
   });
 }

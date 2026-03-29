@@ -1,5 +1,13 @@
 const express = require('express');
 
+function sanitizeRobot(robot) {
+  if (!robot) {
+    return robot;
+  }
+  const { teleopSecret, ...rest } = robot;
+  return rest;
+}
+
 const createRobotsRouter = ({ registry }) => {
   const router = express.Router();
 
@@ -24,7 +32,7 @@ const createRobotsRouter = ({ registry }) => {
    *                     $ref: '#/components/schemas/Robot'
    */
   router.get('/', (req, res) => {
-    res.json({ robots: registry.list() });
+    res.json({ robots: registry.list().map(sanitizeRobot) });
   });
 
   /**
@@ -52,12 +60,28 @@ const createRobotsRouter = ({ registry }) => {
    */
   router.post('/', async (req, res, next) => {
     try {
-      const { name, host, port, requiresX402 } = req.body;
+      const {
+        name,
+        host,
+        port,
+        requiresX402,
+        rosbridgeHost,
+        rosbridgePort,
+        teleopSecret,
+      } = req.body;
       if (!host || !port) {
         return res.status(400).json({ error: 'Host and port are required' });
       }
-      const robot = await registry.addRobot({ name, host, port, requiresX402 });
-      return res.status(201).json(robot);
+      const robot = await registry.addRobot({
+        name,
+        host,
+        port,
+        requiresX402,
+        rosbridgeHost,
+        rosbridgePort,
+        teleopSecret,
+      });
+      return res.status(201).json(sanitizeRobot(robot));
     } catch (error) {
       return next(error);
     }
@@ -98,7 +122,7 @@ const createRobotsRouter = ({ registry }) => {
       const { robotId } = req.params;
       const updates = req.body;
       const robot = registry.updateRobot(robotId, updates);
-      return res.json(robot);
+      return res.json(sanitizeRobot(robot));
     } catch (error) {
       return next(error);
     }
@@ -159,7 +183,7 @@ const createRobotsRouter = ({ registry }) => {
     try {
       const { robotId } = req.params;
       const robot = await registry.refreshRobot(robotId);
-      return res.json(robot);
+      return res.json(sanitizeRobot(robot));
     } catch (error) {
       return next(error);
     }

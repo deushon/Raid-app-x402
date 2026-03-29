@@ -16,6 +16,7 @@ const swaggerDefinition = {
     { name: 'Commands', description: 'High-level actions dispatched to robots.' },
     { name: 'Payments', description: 'x402 payment verification and callbacks.' },
     { name: 'Teleoperator', description: 'Teleoperator registration, login; session via httpOnly cookie or Authorization Bearer (same JWT).' },
+    { name: 'Teleop', description: 'Help requests from robots, operator accept, WebSocket proxy to ROSBridge (see README).' },
   ],
   servers: [
     {
@@ -90,6 +91,8 @@ const swaggerDefinition = {
           host: { type: 'string', example: '192.168.1.10' },
           port: { type: 'integer', example: 8080 },
           requiresX402: { type: 'boolean', example: false },
+          rosbridgeHost: { type: 'string', description: 'ROSBridge WebSocket host (defaults to host)' },
+          rosbridgePort: { type: 'integer', example: 9090, description: 'ROSBridge port' },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time' },
         },
@@ -102,6 +105,12 @@ const swaggerDefinition = {
           host: { type: 'string', example: '192.168.1.10' },
           port: { type: 'integer', example: 8080 },
           requiresX402: { type: 'boolean', example: false },
+          rosbridgeHost: { type: 'string', description: 'Optional; defaults to host' },
+          rosbridgePort: { type: 'integer', example: 9090 },
+          teleopSecret: {
+            type: 'string',
+            description: 'Shared secret for POST /api/robots/{id}/teleop/help (not returned in GET list)',
+          },
         },
       },
       DanceCommandRequest: {

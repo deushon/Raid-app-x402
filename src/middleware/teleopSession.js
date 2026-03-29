@@ -106,6 +106,31 @@ function clearTeleopCookie(req, res, teleoperatorConfig) {
   res.clearCookie(teleoperatorConfig.cookieName, cookieBaseOptions(req, teleoperatorConfig));
 }
 
+/**
+ * Verify teleoperator JWT (same secret as HTTP session). For WebSocket ?token=.
+ * @param {string|null|undefined} token
+ * @param {{ jwtSecret: string }} teleoperatorConfig
+ * @returns {{ id: string, login?: string } | null}
+ */
+function verifyTeleopToken(token, teleoperatorConfig) {
+  if (!token || !teleoperatorConfig?.jwtSecret) {
+    return null;
+  }
+  try {
+    const payload = jwt.verify(token, teleoperatorConfig.jwtSecret);
+    const sub = payload.sub;
+    if (!sub) {
+      return null;
+    }
+    return {
+      id: String(sub),
+      login: typeof payload.login === 'string' ? payload.login : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   createAttachTeleopUser,
   createRequireTeleopSession,
@@ -114,4 +139,5 @@ module.exports = {
   clearTeleopCookie,
   jwtExpiresToMs,
   resolveCookieSecure,
+  verifyTeleopToken,
 };

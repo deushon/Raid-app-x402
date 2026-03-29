@@ -19,7 +19,15 @@ class RobotRegistry {
     return this.getById(robotId);
   }
 
-  async addRobot({ name, host, port, requiresX402 = false }) {
+  async addRobot({
+    name,
+    host,
+    port,
+    requiresX402 = false,
+    rosbridgeHost,
+    rosbridgePort,
+    teleopSecret,
+  }) {
     const id = uuid();
     const robot = {
       id,
@@ -27,6 +35,9 @@ class RobotRegistry {
       host,
       port,
       requiresX402,
+      rosbridgeHost: rosbridgeHost != null && rosbridgeHost !== '' ? rosbridgeHost : host,
+      rosbridgePort: rosbridgePort != null ? Number(rosbridgePort) : 9090,
+      teleopSecret: teleopSecret != null && teleopSecret !== '' ? String(teleopSecret) : null,
       status: {
         state: 'unknown',
         message: 'Awaiting first health check',
@@ -91,14 +102,29 @@ class RobotRegistry {
       throw new Error('Robot not found');
     }
 
+    const next = { ...updates };
+    if (next.teleopSecret === '' || next.teleopSecret === undefined) {
+      delete next.teleopSecret;
+    }
+    if (next.rosbridgePort != null) {
+      next.rosbridgePort = Number(next.rosbridgePort);
+    }
+
     const merged = {
       ...robot,
-      ...updates,
+      ...next,
       status: {
         ...robot.status,
-        ...(updates.status || {}),
+        ...(next.status || {}),
       },
     };
+
+    if (!merged.rosbridgeHost) {
+      merged.rosbridgeHost = merged.host;
+    }
+    if (merged.rosbridgePort == null || Number.isNaN(merged.rosbridgePort)) {
+      merged.rosbridgePort = 9090;
+    }
 
     this.robots.set(robotId, merged);
     return merged;

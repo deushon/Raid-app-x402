@@ -10,12 +10,20 @@
   <body>
     <header>
       <h1>Личный кабинет</h1>
-      <p>Телеоператор</p>
+      <p>Телеоператор — заявки помощи и сессия прокси ROSBridge</p>
     </header>
     <main>
       <section class="panel">
-        <p class="vr-stub">Продолжи на очках VR</p>
-        <p class="hint">Сессия действует до выхода или истечения JWT.</p>
+        <h2>Открытые заявки</h2>
+        <p id="help-error" class="message error hidden"></p>
+        <div id="help-list" class="help-list"><p class="hint">Загрузка…</p></div>
+      </section>
+      <section class="panel">
+        <h2>Активная сессия (после «Принять»)</h2>
+        <p id="session-hint" class="hint">Примите заявку, чтобы получить WebSocket URL для VR.</p>
+        <div id="session-box"></div>
+      </section>
+      <section class="panel">
         <button type="button" id="logout-btn" class="btn-secondary">Выйти</button>
       </section>
     </main>

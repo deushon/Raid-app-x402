@@ -292,11 +292,23 @@ refreshAllButton.addEventListener('click', async () => {
 robotForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(robotForm);
+  const rosbridgePortRaw = formData.get('rosbridgePort');
+  const teleopSecretRaw = formData.get('teleopSecret');
+  const rosbridgeHostRaw = formData.get('rosbridgeHost');
   const payload = {
     name: formData.get('name') || undefined,
     host: formData.get('host'),
     port: Number(formData.get('port')),
     requiresX402: formData.get('requiresX402') === 'on',
+    ...(rosbridgeHostRaw && String(rosbridgeHostRaw).trim()
+      ? { rosbridgeHost: String(rosbridgeHostRaw).trim() }
+      : {}),
+    ...(rosbridgePortRaw !== '' && rosbridgePortRaw != null
+      ? { rosbridgePort: Number(rosbridgePortRaw) }
+      : {}),
+    ...(teleopSecretRaw && String(teleopSecretRaw).trim()
+      ? { teleopSecret: String(teleopSecretRaw).trim() }
+      : {}),
   };
 
   try {

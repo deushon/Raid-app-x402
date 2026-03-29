@@ -155,6 +155,11 @@ const loadConfig = (argv = []) => {
       /** 'auto' | 'always' | 'never' — флаг Secure на cookie (HTTP без TLS ломал логин при always+production) */
       cookieSecureMode: teleoperatorCookieSecureMode,
     },
+    teleop: {
+      enabled: process.env.TELEOP_WS_ENABLED !== '0' && process.env.TELEOP_WS_ENABLED !== 'false',
+      maxMessageBytes: toNumber(process.env.TELEOP_MAX_MESSAGE_BYTES, 16 * 1024 * 1024),
+      rosbridgeConnectTimeoutMs: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS, 10000),
+    },
   };
 };
 

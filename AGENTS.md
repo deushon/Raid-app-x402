@@ -46,6 +46,11 @@
 | [src/routes/client.js](src/routes/client.js)     | Публичный клиентский API: настройки, estimate, invoice, execute                  |
 | [src/routes/admin.js](src/routes/admin.js)       | Админ API (Basic Auth): конфиг AI, RPC клиента                                   |
 | [src/routes/teleoperator.js](src/routes/teleoperator.js) | API телеоператора: регистрация, вход, сессия JWT (cookie)                 |
+| [src/routes/teleopHelp.js](src/routes/teleopHelp.js) | Заявки помощи от робота, accept, broadcast в WS hub                        |
+| [src/ws/teleopServer.js](src/ws/teleopServer.js) | Upgrade: `/ws/teleoperator`, `/ws/teleop/session/:id` → duplex к rosbridge   |
+| [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | PostgreSQL: `help_requests`, `teleop_sessions`                    |
+| [src/services/teleopOperatorHub.js](src/services/teleopOperatorHub.js) | Рассылка JSON событий подключённым телеоператорам                    |
+| [src/db/ensureTeleopHelpSchema.js](src/db/ensureTeleopHelpSchema.js) | DDL телеоп-таблиц                                                   |
 | [src/middleware/auth.js](src/middleware/auth.js) | Basic Auth для `/ui` и `/api/admin`                                              |
 | [src/middleware/teleopSession.js](src/middleware/teleopSession.js) | JWT/cookie сессия телеоператора                              |
 | [src/db/ensureTeleoperatorSchema.js](src/db/ensureTeleoperatorSchema.js) | DDL таблицы `teleoperators` (PostgreSQL)                         |

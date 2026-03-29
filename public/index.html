@@ -53,6 +53,18 @@
             <input type="checkbox" name="requiresX402" />
             Requires x402
           </label>
+          <label>
+            ROSBridge host (optional)
+            <input name="rosbridgeHost" placeholder="defaults to Host" />
+          </label>
+          <label>
+            ROSBridge port
+            <input name="rosbridgePort" placeholder="9090" type="number" />
+          </label>
+          <label>
+            Teleop secret (for POST …/teleop/help)
+            <input name="teleopSecret" type="password" placeholder="LAN shared secret" autocomplete="off" />
+          </label>
           <button type="submit">Add Robot</button>
         </form>
         <div id="robot-form-message" class="message"></div>

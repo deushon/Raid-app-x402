@@ -12,7 +12,8 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **Режим RAID для клиента**: выбор робота через **AIAgentService** (стратегии или webhook **n8n**), настраивается в админке.
 - **ClientPaymentService**: проверка Solana-транзакции и задел под refund при сбое выполнения.
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (см. `src/docs/swagger.js` и JSDoc `@openapi` в роутерах).
-- **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token`. Личный кабинет `/teleoperator/cabinet` (заглушка для VR). В будущем можно добавить оффчейн-вход по подписи кошелька.
+- **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token` и поле **`accessToken`** в JSON (для WebSocket и нативных клиентов). Личный кабинет `/teleoperator/cabinet`: открытые заявки «помощь», приём, **WebSocket URL** для прокси ROSBridge (см. ниже).
+- **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; подключённые телеоператоры получают событие по **`/ws/teleoperator?token=JWT`**.
 
 ## Быстрый старт
 
@@ -21,7 +22,7 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - Node.js 18+
 - npm 9+
 - Для защищённых роботов и серверных оплат: `X402_PRIVATE_KEY` (и при необходимости ключ для Solana).
-- Для телеоператора: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*` и UI `/teleoperator` **не подключаются**.
+- Для телеоператора и **телеоп-прокси**: **PostgreSQL** и переменные `DATABASE_URL`, `TELEOPERATOR_JWT_SECRET` (см. ниже). Без `DATABASE_URL` маршруты `/api/teleoperator/*`, **`/api/.../teleop/help`**, UI `/teleoperator` и WebSocket телеопа **не подключаются**.
 
 ### Установка и запуск
 
@@ -54,7 +55,7 @@ npm run dev                  # nodemon
 
 Сервер слушает `**HOST` / `PORT**`. По умолчанию `**HOST=0.0.0.0**` — это **не** «только localhost»: процесс принимает соединения на **всех сетевых интерфейсах** машины, и с другого компьютера нужно открывать `**http://<публичный-IP-или-DNS-сервера>:3000`** (порт см. `PORT` / `APP_HOST_PORT` в Docker). Примеры с `localhost` в документации — для проверки **с самого сервера**. Если задать `**HOST=127.0.0.1`**, по сети достучаться нельзя (в логе будет предупреждение).
 
-**PostgreSQL (compose):** порт **5434** проброшен на `**127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схема `teleoperators` создаётся при старте приложения.
+**PostgreSQL (compose):** порт **5434** проброшен на `**127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схемы **`teleoperators`**, **`help_requests`**, **`teleop_sessions`** создаются при старте приложения.
 
 **Вариант C — systemd без Docker (пример юнита)**  
 Шаблон: `[deploy/x402-raid-app.service.example](deploy/x402-raid-app.service.example)` — скопируйте в `/etc/systemd/system/`, поправьте пути и `User=`, затем `sudo systemctl enable --now x402-raid-app`.
@@ -71,6 +72,8 @@ npm run dev                  # nodemon
 | `/docs-json`            | Спецификация OpenAPI (JSON)                                                                                                    |
 | `/teleoperator`         | UI телеоператора: регистрация, вход (только если задан `DATABASE_URL`)                                                         |
 | `/teleoperator/cabinet` | Личный кабинет (нужна сессия; иначе редирект на логин). HTML отдаётся только с сервера, не из публичной статики                |
+| `ws://…/ws/teleoperator?token=` | События для телеоператоров (новая заявка помощи). Тот же JWT, что `accessToken` / cookie. За HTTPS используйте **`wss://`** (reverse proxy). |
+| `ws://…/ws/teleop/session/{sessionId}?token=` | Дуплексный прокси **как прямой ROSBridge** (те же JSON-сообщения `op` / `topic` / `msg`). `sessionId` выдаётся после **`POST …/help-requests/{id}/accept`**. |
 
 
 ## Конфигурация
@@ -111,6 +114,9 @@ npm run dev                  # nodemon
 | `TELEOPERATOR_BCRYPT_ROUNDS`  | Стоимость bcrypt (по умолчанию `10`).                                                                                                                                                                     |
 | `TELEOPERATOR_COOKIE_SECURE`  | `auto` (по умолчанию), `always`, `never` — флаг **Secure** у cookie. В режиме **auto** cookie по HTTP получает `Secure: false`, по HTTPS (или за прокси с `X-Forwarded-Proto: https` и **`TRUST_PROXY`**) — `true`. |
 | `TRUST_PROXY`                 | Если приложение за reverse proxy: `1` или число хопов; нужно для корректного **auto** Secure и `req.secure`.                                                                                               |
+| `TELEOP_WS_ENABLED`           | `false` или `0` — отключить обработчик WebSocket телеопа (REST заявок остаётся при `DATABASE_URL`). По умолчанию включено.                                                                              |
+| `TELEOP_MAX_MESSAGE_BYTES`    | Лимит размера кадра WS в байтах (по умолчанию 16 MiB).                                                                                                                                                     |
+| `TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS` | Таймаут подключения сервера к rosbridge на роботе (мс).                                                                                                                                            |
 
 
 ## API (кратко)
@@ -120,8 +126,8 @@ npm run dev                  # nodemon
 
 | Метод            | Путь                       | Описание                                 |
 | ---------------- | -------------------------- | ---------------------------------------- |
-| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402 |
-| `GET` / `POST`   | `/api/robots`              | Список / регистрация                     |
+| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleopWs`** |
+| `GET` / `POST`   | `/api/robots`              | Список / регистрация (в ответе **нет** `teleopSecret`; опционально тело: `rosbridgeHost`, `rosbridgePort`, `teleopSecret`) |
 | `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление                    |
 | `POST`           | `/api/robots/{id}/refresh` | Принудительный health-check              |
 
@@ -167,7 +173,22 @@ npm run dev                  # nodemon
 | `POST` | `/api/teleoperator/login`    | `login`, `password`; cookie + **`accessToken`**.                                              |
 | `POST` | `/api/teleoperator/logout`   | Сброс cookie.                                                                                 |
 | `GET`  | `/api/teleoperator/me`       | Профиль: cookie **`teleop_token`** или заголовок **`Authorization: Bearer`** с JWT.         |
+| `POST` | `/api/robots/{id}/teleop/help` | Робот запрашивает помощь (LAN): **`X-Robot-Teleop-Secret`**, опционально `{ message, metadata }`. Повтор при уже открытой заявке → **200** и `duplicate: true`. |
+| `GET`  | `/api/teleoperator/help-requests` | Список открытых заявок (JWT).                                                          |
+| `POST` | `/api/teleoperator/help-requests/{id}/accept` | Принять заявку → **`session.id`** для WebSocket прокси.                         |
 
+
+### Teleop proxy — контракт для внешних клиентов (Unity / Quest / ROSBridge)
+
+Правки в сторонних репозиториях не входят в этот сервис; ниже контракт для интеграции.
+
+1. **Базовый URL** — тот же хост и порт, что у HTTP API (или **`wss://`** за reverse proxy с поддержкой `Upgrade`).
+2. **JWT**: после `POST /api/teleoperator/login` или `register` сохраните **`accessToken`** (или используйте cookie `teleop_token` только для браузера).
+3. **Поток**: `GET /api/teleoperator/help-requests` → `POST /api/teleoperator/help-requests/{id}/accept` → в ответе **`session.id`**.
+4. **WebSocket (вместо `ws://<робот>:9090`)**:
+   - `ws(s)://<host>:<port>/ws/teleop/session/<sessionId>?token=<URL-encoded JWT>`
+   - После подключения передавайте **те же текстовые кадры JSON**, что при прямом ROSBridge WebSocket (например `op: subscribe`, `op: publish`).
+5. Ограничение размера кадра — см. `TELEOP_MAX_MESSAGE_BYTES`. При обрыве операторского сокета сессия в БД завершается, повторный приём заявки — новая сессия.
 
 Полная схема запросов/ответов — в **Swagger** (`/docs`). Детали протокола x402 в приложении — [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
@@ -176,6 +197,7 @@ npm run dev                  # nodemon
 - `GET /health` или `/helth` → `{ status, message?, availableMethods?, location? }`.
 - `POST /commands/dance`, `POST /commands/buy-cola` с телами согласно команде.
 - Для платных эндпоинтов — ответ **402** в формате V2 (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`).
+- Для телеопа: на роботе доступен **ROSBridge WebSocket** (часто порт **9090**) с той же LAN, откуда `raid_app` достучится до `rosbridgeHost` / `rosbridgePort`. Скрипт на роботе может вызывать **`POST /api/robots/{robotId}/teleop/help`** с секретом, заданным при регистрации робота в админке.
 
 Пример объекта в `availableMethods` см. в предыдущих версиях README или в `swagger.js` (`RobotHealthStatus`).
 
@@ -187,7 +209,7 @@ npm run dev
 npm test
 ```
 
-Тесты телеоператора и репозитория требуют `**TEST_DATABASE_URL**` (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
+Тесты телеоператора, **teleop help** и репозитория требуют `**TEST_DATABASE_URL**` (PostgreSQL). Если переменная не задана, соответствующие наборы помечаются как пропущенные и `npm test` завершается успешно. Пример:
 
 ```bash
 export TEST_DATABASE_URL=postgres://x402:x402@127.0.0.1:5434/x402raid
