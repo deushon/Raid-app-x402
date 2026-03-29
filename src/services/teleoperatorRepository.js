@@ -102,11 +102,20 @@ function createTeleoperatorRepository(pool, options = {}) {
     return bcrypt.compare(String(password), row.password_hash);
   }
 
+  async function listAllPublic() {
+    const result = await pool.query(
+      `SELECT id, login_normalized, wallet_public_key, created_at
+       FROM teleoperators ORDER BY created_at ASC`,
+    );
+    return result.rows.map(toPublicProfile);
+  }
+
   return {
     normalizeLogin,
     validateAndCanonicalizeWalletPublicKey,
     findWithSecretByLoginNormalized,
     findPublicById,
+    listAllPublic,
     createUser,
     verifyPassword,
     toPublicProfile,

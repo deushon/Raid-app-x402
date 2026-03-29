@@ -1,7 +1,14 @@
 const express = require('express');
+const { createRequireFleetOrAdmin, createRequireFleetEnrollment } = require('../middleware/robotFleetAuth');
 
-const createRobotsRouter = ({ registry }) => {
+/**
+ * @param {{ registry: object, config: object, adminConfig: object }} deps
+ */
+const createRobotsRouter = ({ registry, config, adminConfig }) => {
   const router = express.Router();
+  const fleetSecret = config.robots?.fleetEnrollmentSecret || null;
+  const requireFleetOrAdmin = createRequireFleetOrAdmin({ fleetEnrollmentSecret: fleetSecret, adminConfig });
+  const requireFleetEnrollment = createRequireFleetEnrollment({ fleetEnrollmentSecret: fleetSecret });
 
   /**
    * @openapi
@@ -9,14 +16,13 @@ const createRobotsRouter = ({ registry }) => {
    *   get:
    *     tags:
    *       - Robots
-   *     summary: List registered robots
+   *     summary: List registered robots (public, no secrets)
    *     description: >
-   *       Returns registered robots for this server. When DATABASE_URL is set, rows are loaded from
-   *       PostgreSQL on startup and survive app restarts; without DATABASE_URL the list is in-memory only.
-   *       OpenAPI "Example" values are documentation only, not live data.
+   *       Returns robots without teleopSecret. For full fields including secrets use admin API
+   *       GET /api/admin/robots with admin session or Basic Auth.
    *     responses:
    *       200:
-   *         description: Current robot registry.
+   *         description: Current robot registry (sanitized).
    *         content:
    *           application/json:
    *             schema:
@@ -25,10 +31,84 @@ const createRobotsRouter = ({ registry }) => {
    *                 robots:
    *                   type: array
    *                   items:
-   *                     $ref: '#/components/schemas/Robot'
+   *                     $ref: '#/components/schemas/RobotPublic'
    */
   router.get('/', (req, res) => {
-    res.json({ robots: registry.list() });
+    res.json({ robots: registry.listPublic() });
+  });
+
+  /**
+   * @openapi
+   * /api/robots/enroll:
+   *   post:
+   *     tags:
+   *       - Robots
+   *     summary: Fleet self-enrollment (idempotent upsert)
+   *     description: >
+   *       Requires ROBOT_FLEET_ENROLLMENT_SECRET as Bearer token or X-Robot-Fleet-Secret.
+   *       Upserts by stable enrollmentKey; returns robot including teleopSecret (store on device).
+   *     security:
+   *       - RobotFleetBearer: []
+   *       - RobotFleetHeader: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/RobotEnrollRequest'
+   *     responses:
+   *       201:
+   *         description: Created or updated robot (includes teleopSecret).
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Robot'
+   *       400:
+   *         description: Validation error.
+   *       401:
+   *         description: Invalid fleet credential.
+   *       503:
+   *         description: Fleet enrollment not configured.
+   */
+  router.post('/enroll', requireFleetEnrollment, async (req, res, next) => {
+    try {
+      const {
+        enrollmentKey,
+        name,
+        host,
+        port,
+        requiresX402,
+        rosbridgeHost,
+        rosbridgePort,
+        teleopSecret,
+        operatorRegistryUrl,
+      } = req.body || {};
+      if (!host || port == null) {
+        return res.status(400).json({ error: 'host and port are required' });
+      }
+      const robot = await registry.enrollOrUpdateRobot({
+        enrollmentKey,
+        name,
+        host,
+        port,
+        requiresX402,
+        rosbridgeHost,
+        rosbridgePort,
+        teleopSecret,
+        operatorRegistryUrl,
+      });
+      try {
+        await registry.refreshRobot(robot.id);
+      } catch (e) {
+        /* non-fatal */
+      }
+      return res.status(200).json(registry.getById(robot.id));
+    } catch (error) {
+      if (error.message === 'enrollmentKey is required') {
+        return res.status(400).json({ error: error.message });
+      }
+      return next(error);
+    }
   });
 
   /**
@@ -37,7 +117,15 @@ const createRobotsRouter = ({ registry }) => {
    *   post:
    *     tags:
    *       - Robots
-   *     summary: Register a new robot
+   *     summary: Register a robot (admin or fleet credential)
+   *     description: >
+   *       Requires admin session/Basic Auth, or ROBOT_FLEET_ENROLLMENT_SECRET as Bearer / X-Robot-Fleet-Secret.
+   *       Each call creates a new UUID unless you use POST /api/robots/enroll with enrollmentKey.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *       - RobotFleetBearer: []
+   *       - RobotFleetHeader: []
    *     requestBody:
    *       required: true
    *       content:
@@ -46,15 +134,11 @@ const createRobotsRouter = ({ registry }) => {
    *             $ref: '#/components/schemas/RegisterRobotRequest'
    *     responses:
    *       201:
-   *         description: Robot added and health check scheduled.
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Robot'
-   *       400:
-   *         description: Missing host or port.
+   *         description: Robot added.
+   *       401:
+   *         description: Not authorized.
    */
-  router.post('/', async (req, res, next) => {
+  router.post('/', requireFleetOrAdmin, async (req, res, next) => {
     try {
       const {
         name,
@@ -64,7 +148,9 @@ const createRobotsRouter = ({ registry }) => {
         rosbridgeHost,
         rosbridgePort,
         teleopSecret,
-      } = req.body;
+        enrollmentKey,
+        operatorRegistryUrl,
+      } = req.body || {};
       if (!host || !port) {
         return res.status(400).json({ error: 'Host and port are required' });
       }
@@ -76,6 +162,8 @@ const createRobotsRouter = ({ registry }) => {
         rosbridgeHost,
         rosbridgePort,
         teleopSecret,
+        enrollmentKey,
+        operatorRegistryUrl,
       });
       return res.status(201).json(robot);
     } catch (error) {
@@ -90,36 +178,22 @@ const createRobotsRouter = ({ registry }) => {
    *     tags:
    *       - Robots
    *     summary: Update robot metadata
-   *     parameters:
-   *       - in: path
-   *         name: robotId
-   *         schema:
-   *           type: string
-   *         required: true
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             additionalProperties: true
-   *     responses:
-   *       200:
-   *         description: Updated robot.
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Robot'
-   *       404:
-   *         description: Robot not found.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *       - RobotFleetBearer: []
+   *       - RobotFleetHeader: []
    */
-  router.put('/:robotId', async (req, res, next) => {
+  router.put('/:robotId', requireFleetOrAdmin, async (req, res, next) => {
     try {
       const { robotId } = req.params;
       const updates = req.body;
       const robot = await registry.updateRobot(robotId, updates);
       return res.json(robot);
     } catch (error) {
+      if (error.message === 'Robot not found') {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
       return next(error);
     }
   });
@@ -131,19 +205,13 @@ const createRobotsRouter = ({ registry }) => {
    *     tags:
    *       - Robots
    *     summary: Remove robot from registry
-   *     parameters:
-   *       - in: path
-   *         name: robotId
-   *         schema:
-   *           type: string
-   *         required: true
-   *     responses:
-   *       204:
-   *         description: Robot removed.
-   *       404:
-   *         description: Robot not found.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *       - RobotFleetBearer: []
+   *       - RobotFleetHeader: []
    */
-  router.delete('/:robotId', async (req, res, next) => {
+  router.delete('/:robotId', requireFleetOrAdmin, async (req, res, next) => {
     try {
       const { robotId } = req.params;
       const result = await registry.removeRobot(robotId);
@@ -163,28 +231,21 @@ const createRobotsRouter = ({ registry }) => {
    *     tags:
    *       - Robots
    *     summary: Trigger a robot health check
-   *     parameters:
-   *       - in: path
-   *         name: robotId
-   *         schema:
-   *           type: string
-   *         required: true
-   *     responses:
-   *       200:
-   *         description: Updated robot snapshot.
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Robot'
-   *       404:
-   *         description: Robot not found.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *       - RobotFleetBearer: []
+   *       - RobotFleetHeader: []
    */
-  router.post('/:robotId/refresh', async (req, res, next) => {
+  router.post('/:robotId/refresh', requireFleetOrAdmin, async (req, res, next) => {
     try {
       const { robotId } = req.params;
       const robot = await registry.refreshRobot(robotId);
       return res.json(robot);
     } catch (error) {
+      if (error.message === 'Robot not found') {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
       return next(error);
     }
   });
@@ -193,4 +254,3 @@ const createRobotsRouter = ({ registry }) => {
 };
 
 module.exports = createRobotsRouter;
-

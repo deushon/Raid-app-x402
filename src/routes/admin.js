@@ -10,10 +10,19 @@ const {
   hasValidSessionCookie,
   credentialsMatch,
 } = require('../middleware/adminAuth');
+const { createTeleoperatorRepository } = require('../services/teleoperatorRepository');
+const { createTeleoperatorRobotGrantRepository } = require('../services/teleoperatorRobotGrantRepository');
+const { pushOperatorAllowlistToRobot } = require('../services/robotOperatorSync');
 
 const CONFIG_FILE = path.join(process.cwd(), 'config', 'ai-agent.json');
 
-const createAdminRouter = ({ settingsStore, adminConfig } = {}) => {
+const createAdminRouter = ({
+  settingsStore,
+  adminConfig,
+  registry = null,
+  pool = null,
+  config = null,
+} = {}) => {
   if (!adminConfig?.sessionSecret) {
     throw new Error('createAdminRouter requires adminConfig.sessionSecret');
   }
@@ -120,6 +129,225 @@ const createAdminRouter = ({ settingsStore, adminConfig } = {}) => {
   });
 
   router.use(createAdminApiAuthMiddleware(adminConfig));
+
+  const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
+  const teleoperatorRepository =
+    pool && config
+      ? createTeleoperatorRepository(pool, { bcryptRounds: config.teleoperator.bcryptRounds })
+      : null;
+
+  /**
+   * @openapi
+   * /api/admin/robots:
+   *   get:
+   *     tags:
+   *       - Admin
+   *     summary: List robots (includes teleopSecret)
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   */
+  if (registry) {
+    router.get('/robots', (req, res) => {
+      res.json({ robots: registry.list() });
+    });
+
+    /**
+     * @openapi
+     * /api/admin/robots:
+     *   post:
+     *     tags:
+     *       - Admin
+     *     summary: Register robot (full fields)
+     *     security:
+     *       - AdminSessionCookie: []
+     *       - AdminBasic: []
+     */
+    router.post('/robots', async (req, res, next) => {
+      try {
+        const {
+          name,
+          host,
+          port,
+          requiresX402,
+          rosbridgeHost,
+          rosbridgePort,
+          teleopSecret,
+          enrollmentKey,
+          operatorRegistryUrl,
+        } = req.body || {};
+        if (!host || !port) {
+          return res.status(400).json({ error: 'Host and port are required' });
+        }
+        const robot = await registry.addRobot({
+          name,
+          host,
+          port,
+          requiresX402,
+          rosbridgeHost,
+          rosbridgePort,
+          teleopSecret,
+          enrollmentKey,
+          operatorRegistryUrl,
+        });
+        return res.status(201).json(robot);
+      } catch (error) {
+        return next(error);
+      }
+    });
+
+    router.put('/robots/:robotId', async (req, res, next) => {
+      try {
+        const robot = await registry.updateRobot(req.params.robotId, req.body || {});
+        return res.json(robot);
+      } catch (error) {
+        if (error.message === 'Robot not found') {
+          return res.status(404).json({ error: 'Robot not found' });
+        }
+        return next(error);
+      }
+    });
+
+    router.delete('/robots/:robotId', async (req, res, next) => {
+      try {
+        const ok = await registry.removeRobot(req.params.robotId);
+        if (!ok) {
+          return res.status(404).json({ error: 'Robot not found' });
+        }
+        return res.status(204).send();
+      } catch (error) {
+        return next(error);
+      }
+    });
+
+    router.post('/robots/:robotId/refresh', async (req, res, next) => {
+      try {
+        const robot = await registry.refreshRobot(req.params.robotId);
+        return res.json(robot);
+      } catch (error) {
+        if (error.message === 'Robot not found') {
+          return res.status(404).json({ error: 'Robot not found' });
+        }
+        return next(error);
+      }
+    });
+
+    /**
+     * @openapi
+     * /api/admin/robots/{robotId}/sync-operator-allowlist:
+     *   post:
+     *     tags:
+     *       - Admin
+     *     summary: Push allowed teleoperator IDs to robot (optional HTTP API)
+     *     security:
+     *       - AdminSessionCookie: []
+     *       - AdminBasic: []
+     */
+    router.post('/robots/:robotId/sync-operator-allowlist', async (req, res) => {
+      if (!grantRepository) {
+        return res.status(503).json({ error: 'Database not configured' });
+      }
+      const robot = registry.getById(req.params.robotId);
+      if (!robot) {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
+      const ids = await grantRepository.listActiveTeleoperatorIdsForRobot(req.params.robotId);
+      const result = await pushOperatorAllowlistToRobot({
+        robot,
+        raidToRobotSecret: config?.robots?.raidToRobotSecret ?? null,
+        allowedTeleoperatorIds: ids,
+      });
+      return res.json({ ok: true, robotId: robot.id, ...result });
+    });
+  }
+
+  if (pool && grantRepository && teleoperatorRepository && registry) {
+    /**
+     * @openapi
+     * /api/admin/teleoperators:
+     *   get:
+     *     tags:
+     *       - Admin
+     *     summary: List teleoperator accounts (public fields)
+     *     security:
+     *       - AdminSessionCookie: []
+     *       - AdminBasic: []
+     */
+    router.get('/teleoperators', async (req, res, next) => {
+      try {
+        const users = await teleoperatorRepository.listAllPublic();
+        return res.json({ teleoperators: users });
+      } catch (error) {
+        return next(error);
+      }
+    });
+
+    /**
+     * @openapi
+     * /api/admin/teleoperator-grants:
+     *   get:
+     *     tags:
+     *       - Admin
+     *     summary: List active teleoperator–robot grants
+     *     security:
+     *       - AdminSessionCookie: []
+     *       - AdminBasic: []
+     */
+    router.get('/teleoperator-grants', async (req, res, next) => {
+      try {
+        const rows = await grantRepository.listActive();
+        return res.json({
+          grants: rows.map((g) => ({
+            teleoperatorId: g.teleoperator_id,
+            robotId: g.robot_id,
+            teleoperatorLogin: g.teleoperator_login,
+            createdAt: g.created_at,
+          })),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    });
+
+    router.post('/teleoperator-grants', async (req, res, next) => {
+      try {
+        const { teleoperatorId, robotId } = req.body || {};
+        if (!teleoperatorId || !robotId) {
+          return res.status(400).json({ error: 'teleoperatorId and robotId are required' });
+        }
+        const op = await teleoperatorRepository.findPublicById(teleoperatorId);
+        if (!op) {
+          return res.status(404).json({ error: 'Teleoperator not found' });
+        }
+        if (registry && !registry.getById(robotId)) {
+          return res.status(404).json({ error: 'Robot not found' });
+        }
+        const row = await grantRepository.grant({ teleoperatorId, robotId });
+        return res.status(201).json({
+          grant: {
+            teleoperatorId: row.teleoperator_id,
+            robotId: row.robot_id,
+            createdAt: row.created_at,
+          },
+        });
+      } catch (error) {
+        return next(error);
+      }
+    });
+
+    router.delete('/teleoperator-grants/:teleoperatorId/:robotId', async (req, res, next) => {
+      try {
+        const { teleoperatorId, robotId } = req.params;
+        const ok = await grantRepository.revoke({ teleoperatorId, robotId });
+        if (!ok) {
+          return res.status(404).json({ error: 'Active grant not found' });
+        }
+        return res.status(204).send();
+      } catch (error) {
+        return next(error);
+      }
+    });
+  }
 
   /**
    * @openapi

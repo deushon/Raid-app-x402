@@ -33,6 +33,8 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # mDNS (MDNS_ENABLED): в обычном bridge multicast с хоста часто не доходит до контейнера.
+    # Для рекламы в LAN используйте network_mode: host (и тогда уберите/согласуйте ports).
     # Явно на всех интерфейсах хоста — доступ по IP/домену сервера, не только с localhost
     ports:
       - "0.0.0.0:${APP_HOST_PORT:-3000}:3000"

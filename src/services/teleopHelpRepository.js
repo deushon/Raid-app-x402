@@ -39,6 +39,48 @@ async function listOpenHelpRequests(pool) {
 }
 
 /**
+ * Open help requests visible to this teleoperator: all robots without any active grant,
+ * plus robots where this teleoperator has an active grant.
+ * @param {import('pg').Pool} pool
+ * @param {string} teleoperatorId
+ */
+async function listOpenHelpRequestsForTeleoperator(pool, teleoperatorId) {
+  const r = await pool.query(
+    `SELECT hr.id, hr.robot_id, hr.status, hr.payload, hr.created_at, hr.claimed_by, hr.claimed_at
+     FROM help_requests hr
+     WHERE hr.status = 'open'
+       AND (
+         NOT EXISTS (
+           SELECT 1 FROM teleoperator_robot_grants g
+           WHERE g.robot_id = hr.robot_id::uuid AND g.revoked_at IS NULL
+         )
+         OR EXISTS (
+           SELECT 1 FROM teleoperator_robot_grants g
+           WHERE g.robot_id = hr.robot_id::uuid
+             AND g.teleoperator_id = $1::uuid
+             AND g.revoked_at IS NULL
+         )
+       )
+     ORDER BY hr.created_at ASC`,
+    [teleoperatorId],
+  );
+  return r.rows;
+}
+
+/**
+ * @param {import('pg').Pool} pool
+ * @param {string} requestId
+ * @returns {Promise<{ id: string, robot_id: string } | null>}
+ */
+async function getOpenHelpRequestMeta(pool, requestId) {
+  const r = await pool.query(
+    `SELECT id, robot_id FROM help_requests WHERE id = $1 AND status = 'open'`,
+    [requestId],
+  );
+  return r.rows[0] || null;
+}
+
+/**
  * @param {import('pg').Pool} pool
  * @param {{ requestId: string, teleoperatorId: string }} input
  * @returns {Promise<{ helpRequest: object, session: object } | null>}
@@ -115,6 +157,8 @@ async function endTeleopSession(pool, sessionId) {
 module.exports = {
   createHelpRequest,
   listOpenHelpRequests,
+  listOpenHelpRequestsForTeleoperator,
+  getOpenHelpRequestMeta,
   acceptHelpRequest,
   getActiveSessionForOperator,
   endTeleopSession,

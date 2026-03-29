@@ -13,7 +13,8 @@ Node.js (Express) сервис, который оркестрирует x402-п�
 - **ClientPaymentService**: проверка Solana-транзакции и задел под refund при сбое выполнения.
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (см. `src/docs/swagger.js` и JSDoc `@openapi` в роутерах).
 - **Телеоператор** (при настроенном `DATABASE_URL`): регистрация и вход (логин + пароль), в PostgreSQL хранится **bcrypt**-хеш пароля и **открытый** Solana `walletPublicKey`; сессия — **JWT** в httpOnly-cookie `teleop_token` и поле **`accessToken`** в JSON (для WebSocket и нативных клиентов). Личный кабинет `/teleoperator/cabinet`: открытые заявки «помощь», приём, **WebSocket URL** для прокси ROSBridge (см. ниже).
-- **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). В это подключение по умолчанию добавляются **идентификатор телеоператора**: заголовки **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** (отключаются env **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; подключённые телеоператоры получают событие по **`/ws/teleoperator?token=JWT`**.
+- **Телеоп-прокси (ROSBridge)**: робот и `raid_app` в **одной LAN**; сервер открывает исходящий WebSocket к `ws://rosbridgeHost:rosbridgePort` (по умолчанию тот же `host`, порт **9090**). В это подключение по умолчанию добавляются **идентификатор телеоператора**: заголовки **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** и query **`teleoperator_id`** / **`teleoperator_login`** (отключаются env **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Оператор и VR-клиент подключаются только к **этому сервису** (`/ws/teleop/session/...`), без прямого доступа к rosbridge в интернет. Заявка **`POST /api/robots/{id}/teleop/help`** с заголовком **`X-Robot-Teleop-Secret`**; событие **`help_request`** по **`/ws/teleoperator?token=JWT`** и строки в **`GET /api/teleoperator/help-requests`** получают **все** подключённые операторы только если у робота **нет** активных выдач в **`teleoperator_robot_grants`**. Если выдачи есть — уведомления и список заявок по этому роботу видят **только** операторы с grant (таблица **`teleoperator_robot_grants`**, UI **`/ui/teleop-access.html`**); принять заявку может тот же набор.
+- **Флот и mDNS**: **`ROBOT_FLEET_ENROLLMENT_SECRET`** для **`POST /api/robots/enroll`** (стабильный **`enrollmentKey`** на роботе); опционально **`MDNS_ENABLED`** / **`MDNS_HOSTNAME`** — сервис объявляется в LAN как **`<hostname>.local`** (см. `config/env.example`). Push allowlist на робот: **`RAID_TO_ROBOT_SECRET`** и [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md).
 
 ## Быстрый старт
 
@@ -37,7 +38,7 @@ docker compose up -d --build
 - API и UI доступны **по сети с любой машины** (если firewall пускает): `**http://<IP-или-DNS-сервера>:3000`**. Порт на хосте: `APP_HOST_PORT` (по умолчанию 3000), публикация `**0.0.0.0**` (все интерфейсы).
 - Внутри compose для приложения `**DATABASE_URL` задаётся автоматически** (хост `postgres`, порт `5432`); значение `DATABASE_URL` в `.env` для этого режима **переопределяется** сервисом `app`.
 - Каталог `**config/`** смонтирован в контейнер: `client-settings.json`, `ai-agent.json` и т.п. сохраняются на диске хоста.
-- Данные **PostgreSQL** лежат в именованном томе **`x402_raid_pgdata`** (роботы, телеоператоры, заявки помощи переживают пересборку контейнеров). Полное удаление данных: `docker compose down -v`.
+- Данные **PostgreSQL** лежат в именованном томе **`x402_raid_pgdata`** (роботы, телеоператоры, заявки помощи переживают пересборку контейнеров). **Не используйте** `docker compose down -v`, если нужно сохранить пользователей и роботов — флаг **`-v` удалит том и все данные**. Обычная остановка: `docker compose down` без **`-v`**.
 - Логи: `docker compose logs -f app`
 - Остановка: `docker compose down`
 
@@ -56,7 +57,7 @@ npm run dev                  # nodemon
 
 Сервер слушает `**HOST` / `PORT**`. По умолчанию `**HOST=0.0.0.0**` — это **не** «только localhost»: процесс принимает соединения на **всех сетевых интерфейсах** машины, и с другого компьютера нужно открывать `**http://<публичный-IP-или-DNS-сервера>:3000`** (порт см. `PORT` / `APP_HOST_PORT` в Docker). Примеры с `localhost` в документации — для проверки **с самого сервера**. Если задать `**HOST=127.0.0.1`**, по сети достучаться нельзя (в логе будет предупреждение).
 
-**PostgreSQL (compose):** порт **5434** проброшен на `**127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. Схемы **`teleoperators`**, **`help_requests`**, **`teleop_sessions`** создаются при старте приложения.
+**PostgreSQL (compose):** порт **5434** проброшен на `**127.0.0.1`** хоста (только доступ с этого сервера, не из интернета). Пользователь `x402`, пароль `x402`, БД `x402raid`. Для `npm run` на хосте: `DATABASE_URL=...localhost:5434...`. Контейнер `app` подключается к БД по внутреннему адресу `postgres:5432`. При старте создаются таблицы **`teleoperators`**, **`robots`**, **`help_requests`**, **`teleop_sessions`**, **`teleoperator_robot_grants`** (ACL телеоператор↔робот).
 
 **Вариант C — systemd без Docker (пример юнита)**  
 Шаблон: `[deploy/x402-raid-app.service.example](deploy/x402-raid-app.service.example)` — скопируйте в `/etc/systemd/system/`, поправьте пути и `User=`, затем `sudo systemctl enable --now x402-raid-app`.
@@ -68,12 +69,13 @@ npm run dev                  # nodemon
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `/`                     | Редирект на `/client`                                                                                                          |
 | `/client`               | Публичный UI: настройки RPC, список роботов/команд, direct/raid, оплата и выполнение                                           |
-| `/ui`                   | Админка (статический UI): регистрация роботов, команды, карта — **требуется Basic Auth** (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
+| `/ui`                   | Админка: сессия через **`POST /api/admin/login`** (cookie) или редирект на `/ui/login.html`; API `/api/admin/*` — cookie **или** HTTP Basic (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
+| `/ui/teleop-access.html` | Список операторов и роботов, **grants** (кто может принять teleop на каком роботе), синхронизация allowlist на робот (см. [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md)). В «Add grant» операторы берутся из БД: сначала нужна хотя бы одна регистрация на **`/teleoperator`**. |
 | `/docs`                 | Swagger UI                                                                                                                     |
 | `/docs-json`            | Спецификация OpenAPI (JSON)                                                                                                    |
 | `/teleoperator`         | UI телеоператора: регистрация, вход (только если задан `DATABASE_URL`)                                                         |
 | `/teleoperator/cabinet` | Личный кабинет (нужна сессия; иначе редирект на логин). HTML отдаётся только с сервера, не из публичной статики                |
-| `ws://…/ws/teleoperator?token=` | События для телеоператоров (новая заявка помощи). Тот же JWT, что `accessToken` / cookie. За HTTPS используйте **`wss://`** (reverse proxy). |
+| `ws://…/ws/teleoperator?token=` | События для телеоператоров (новая заявка помощи). При ACL на роботе — только у операторов с grant на этот робот. Тот же JWT, что `accessToken` / cookie. За HTTPS используйте **`wss://`** (reverse proxy). |
 | `ws://…/ws/teleop/session/{sessionId}?token=` | Дуплексный прокси **как прямой ROSBridge** (те же JSON-сообщения `op` / `topic` / `msg`). `sessionId` выдаётся после **`POST …/help-requests/{id}/accept`**. |
 
 
@@ -96,7 +98,7 @@ npm run dev                  # nodemon
 | `ADMIN_PASSWORD` | Пароль (**смените в проде**) | `admin`      |
 
 
-Защищённые префиксы: статика `/ui` и API `/api/admin/`*.
+Защищённые префиксы: статика `/ui` (кроме логина и общих стилей) и API `/api/admin/*` после логина или Basic.
 
 ### CORS и доступ из приложений
 
@@ -127,6 +129,15 @@ npm run dev                  # nodemon
 
 Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js).
 
+### Роботы: секрет флота, mDNS, синхронизация allowlist
+
+| Переменная | Описание |
+| ---------- | -------- |
+| **`ROBOT_FLEET_ENROLLMENT_SECRET`** | Общий секрет роботов: `Authorization: Bearer …` или **`X-Robot-Fleet-Secret`** на **`POST /api/robots/enroll`** и (вместе с админом) на изменение **`/api/robots/*`**. Без секрета enroll возвращает **503**. Неверный секрет: **401** с текстом **`Invalid or missing fleet credential`**. Если при enroll приходит только **`{"error":"Unauthorized"}`** при включённой БД — обновите приложение (исправлена путаница маршрутов с телеоператором). |
+| **`RAID_TO_ROBOT_SECRET`** | Секрет для HTTP **POST** на **`operatorRegistryUrl`** робота (push списка id операторов); см. [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
+| **`MDNS_ENABLED`** | `true` / `1` / `yes` / `on` — включить mDNS (UDP 5353, multicast). |
+| **`MDNS_HOSTNAME`** | Имя экземпляра (по умолчанию `raid-app`); в LAN обычно доступно как **`<имя>.local`**. В логах при успехе: **`mDNS advertisement started`**; если вместо этого ошибка — объявление в LAN не работает. В Docker с **bridge** multicast часто не доходит до других хостов даже при успешном старте — тогда **host network** для сервиса `app` или доступ по IP. |
+
 ## API (кратко)
 
 ### Сервис и роботы
@@ -135,9 +146,14 @@ npm run dev                  # nodemon
 | Метод            | Путь                       | Описание                                 |
 | ---------------- | -------------------------- | ---------------------------------------- |
 | `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`** |
-| `GET` / `POST`   | `/api/robots`              | Список / регистрация. При **`DATABASE_URL`** список **сохраняется в PostgreSQL** и восстанавливается после рестарта; без БД — только в памяти процесса. В ответе сейчас есть **`teleopSecret`**. Тело: опционально `rosbridgeHost`, `rosbridgePort`, `teleopSecret`. **Примеры в Swagger** — иллюстрация, не живые данные. |
-| `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление                    |
-| `POST`           | `/api/robots/{id}/refresh` | Принудительный health-check              |
+| `GET`            | `/api/robots`              | Публичный список роботов **без** `teleopSecret`. Персистентность как выше. |
+| `POST`           | `/api/robots/enroll`       | Саморегистрация флота: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` или **`X-Robot-Fleet-Secret`**), тело с **`enrollmentKey`** (стабильный id устройства), `host`, `port`, опционально `teleopSecret`, `operatorRegistryUrl`. Идемпотентный upsert; в ответе есть `teleopSecret`. Ожидаемые ошибки: **503** (секрет флота не настроен), **401** с упоминанием **fleet credential** (секрет не совпал). |
+| `POST`           | `/api/robots`              | Новая регистрация (новый UUID): тот же секрет флота **или** сессия админа. Полный ответ с `teleopSecret`. |
+| `PUT` / `DELETE` | `/api/robots/{id}`         | Обновление / удаление — секрет флота **или** админ. |
+| `POST`           | `/api/robots/{id}/refresh` | Health-check — секрет флота **или** админ. |
+| `GET` / `POST`   | `/api/admin/robots`        | Список / создание робота с полными полями (включая `teleopSecret`); только **админ** (cookie или Basic). |
+| `PUT` / `DELETE` | `/api/admin/robots/{id}`   | Обновление / удаление. |
+| `POST`           | `/api/admin/robots/{id}/refresh` | Принудительный health-check. |
 
 
 ### Команды (сервер как x402-клиент к роботам)
@@ -168,8 +184,11 @@ npm run dev                  # nodemon
 | Метод          | Путь                         | Описание                                              |
 | -------------- | ---------------------------- | ----------------------------------------------------- |
 | `POST`         | `/api/payments/x402`         | Пример callback с проверкой подписи (x402 middleware) |
-| `GET` / `POST` | `/api/admin/ai-agent`        | Чтение / сохранение конфига AI (Basic Auth)           |
-| `GET` / `POST` | `/api/admin/client-settings` | Просмотр / сохранение RPC с админки (Basic Auth)      |
+| `GET` / `POST` | `/api/admin/ai-agent`        | Чтение / сохранение конфига AI (сессия или Basic)      |
+| `GET` / `POST` | `/api/admin/client-settings` | Просмотр / сохранение RPC (сессия или Basic)           |
+| `GET`          | `/api/admin/teleoperators`   | Список телеоператоров (публичные поля), для UI grants  |
+| `GET` / `POST` / `DELETE` | `/api/admin/teleoperator-grants` … | Выдачи оператор↔робот; **DELETE** `/api/admin/teleoperator-grants/{teleoperatorId}/{robotId}` — отзыв |
+| `POST`         | `/api/admin/robots/{id}/sync-operator-allowlist` | HTTP push allowlist на `operatorRegistryUrl` робота ([docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md)) |
 
 
 ### Телеоператор (без Basic Auth; сессия по cookie `teleop_token`)
@@ -183,7 +202,7 @@ npm run dev                  # nodemon
 | `GET`  | `/api/teleoperator/me`       | Профиль: cookie **`teleop_token`** или заголовок **`Authorization: Bearer`** с JWT.         |
 | `POST` | `/api/robots/{id}/teleop/help` | Робот запрашивает помощь (LAN): **`X-Robot-Teleop-Secret`**, опционально `{ message, metadata }`. Повтор при уже открытой заявке → **200** и `duplicate: true`. |
 | `GET`  | `/api/teleoperator/help-requests` | Список открытых заявок (JWT).                                                          |
-| `POST` | `/api/teleoperator/help-requests/{id}/accept` | Принять заявку → **`session.id`** для WebSocket прокси.                         |
+| `POST` | `/api/teleoperator/help-requests/{id}/accept` | Принять заявку → **`session.id`**. Если у робота есть **хотя бы одна** активная выдача в **`teleoperator_robot_grants`**, принять может только выданный оператор; иначе — любой вошедший (как раньше). |
 
 
 ### Teleop proxy — контракт для внешних клиентов (Unity / Quest / ROSBridge)
@@ -238,6 +257,7 @@ npm test
 
 - [AGENTS.md](AGENTS.md) — правила контрибуции для автоматизированных ассистентов (README, Swagger, тесты, коммиты).
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` с робота (`teleop_fetch`) и связь с WS/rosbridge.
+- [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — гайд для агента/разработчика **кода на роботе**: enroll, секреты, help, allowlist, rosbridge.
 
 ## Прочее
 

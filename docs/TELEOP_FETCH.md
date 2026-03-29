@@ -2,7 +2,7 @@
 
 Документ описывает **HTTP-вызов с робота** к Raid App (условное имя **`teleop_fetch`**: скрипт, ROS-нода, systemd и т.д.) и **что робот видит**, когда телеоператор уже принял заявку и идёт прокси к ROSBridge.
 
-См. также: [README.md](../README.md) (таблица `TELEOP_*`, Docker, health), исходный код [`src/routes/teleopHelp.js`](../src/routes/teleopHelp.js), [`src/ws/teleopServer.js`](../src/ws/teleopServer.js).
+См. также: [README.md](../README.md) (таблица `TELEOP_*`, Docker, health), [ROBOT_SIDE_AI_AGENT.md](./ROBOT_SIDE_AI_AGENT.md) (чеклист для кода на роботе), исходный код [`src/routes/teleopHelp.js`](../src/routes/teleopHelp.js), [`src/ws/teleopServer.js`](../src/ws/teleopServer.js).
 
 ---
 
@@ -19,10 +19,24 @@
 Без них маршрут помощи **не смонтирован** (запрос к `/api/robots/.../teleop/help` не обработается как телеоп):
 
 1. Заданы **`DATABASE_URL`** и **`TELEOPERATOR_JWT_SECRET`** — создаются таблицы, подключаются `/api/teleoperator/*`, **`/api/robots/.../teleop/help`**, UI `/teleoperator`.
-2. Робот **зарегистрирован** в реестре (админка `/ui` или `POST /api/robots`).
-3. В карточке робота задан **`teleopSecret`** (сейчас поле **`teleopSecret`** также приходит в **`GET /api/robots`**; не светите ответ в логах и публичных клиентах).
+2. Робот **зарегистрирован** в реестре: админка **`/ui`** (**`/api/admin/robots`**), либо **`POST /api/robots/enroll`** с **`ROBOT_FLEET_ENROLLMENT_SECRET`** (заголовок **`X-Robot-Fleet-Secret`** или **`Authorization: Bearer`**), либо **`POST /api/robots`** с тем же секретом или админ-сессией.
+3. В карточке робота задан **`teleopSecret`** (ответ enroll/админского API; **публичный** **`GET /api/robots`** секрет **не** отдаёт).
 
 Проверка: **`GET /health`** — **`teleoperatorEnabled: true`**, если БД подключена; **`teleopWs: true`**, если ещё включён WebSocket-телеоп (`TELEOP_WS_ENABLED` не `false`/`0`).
+
+### Регистрация в реестре (`POST /api/robots/enroll`)
+
+Рекомендуемый путь для робота: один раз (и при смене IP/host) вызвать **`POST /api/robots/enroll`** с тем же **`enrollmentKey`** (стабильный id устройства в вашем конфиге).
+
+| Параметр | Значение |
+| --- | --- |
+| **URL** | `http(s)://<RAID_HOST>:<PORT>/api/robots/enroll` |
+| **Авторизация флота** | **`X-Robot-Fleet-Secret: <ROBOT_FLEET_ENROLLMENT_SECRET>`** или **`Authorization: Bearer <тот же секрет>`** |
+| **Тело (JSON)** | Обязательно **`enrollmentKey`**, **`host`**, **`port`**; опционально **`name`**, **`rosbridgeHost`**, **`rosbridgePort`**, **`teleopSecret`** (если не задать — сервер сгенерирует), **`operatorRegistryUrl`** (для push allowlist, см. [ROBOT_OPERATOR_SYNC.md](./ROBOT_OPERATOR_SYNC.md)) |
+
+В ответе — полный объект робота, включая **`id`** (сохраните как **`robotId`**) и **`teleopSecret`**. Повторный вызов с тем же **`enrollmentKey`** обновляет строку (тот же **`id`**).
+
+Обнаружение **`RAID_HOST`**: можно задать в конфиге **`http://raid-app.local:3000`** при включённом mDNS на сервере (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, см. README).
 
 ---
 
@@ -32,7 +46,7 @@
 | --- | --- |
 | **Метод** | `POST` |
 | **URL** | `http(s)://<HOST>:<PORT>/api/robots/<robotId>/teleop/help` |
-| **`robotId`** | UUID из ответа `POST /api/robots` при регистрации (не `host:port` робота). |
+| **`robotId`** | UUID из ответа **`POST /api/robots/enroll`** или админского **`POST /api/admin/robots`** (не `host:port` робота). |
 | **Секрет робота** | Заголовок **`X-Robot-Teleop-Secret: <секрет>`** — тот же, что в реестре. **Или** **`Authorization: Bearer <секрет>`** (то же значение). |
 | **Тело** | Необязательно: `{ "message": "…", "metadata": { … } }`. |
 | **Content-Type** | При теле: `application/json`. |
@@ -47,7 +61,7 @@
 | **404** | Нет такого `robotId` в реестре. |
 | **500** | Ошибка сервера/БД. |
 
-После **201/200** подписанные телеоператоры получают событие по **`/ws/teleoperator?token=…`** (их JWT). На роботе дополнительно ничего открывать для этого не нужно.
+После **201/200** событие **`help_request`** уходит по **`/ws/teleoperator?token=…`**: если у робота есть активные строки в **`teleoperator_robot_grants`**, только этим операторам; иначе — всем подключённым с валидным JWT. На роботе дополнительно ничего открывать для этого не нужно.
 
 ### Пример (`curl`)
 
@@ -105,7 +119,7 @@ ws://192.168.1.10:9090?teleoperator_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890&tele
 
 - Робот и `raid_app` должны видеть друг друга по сети (часто **LAN** и для HTTP `teleop/help`, и для исходящего WS к rosbridge).
 - Секрет `teleopSecret` не логируйте целиком.
-- CORS разрешает **`X-Robot-Teleop-Secret`** для браузера; типичный `teleop_fetch` на роботе — **сервер-сервер**, CORS не используется.
+- CORS разрешает **`X-Robot-Teleop-Secret`** и **`X-Robot-Fleet-Secret`** для браузера; типичный `teleop_fetch` на роботе — **сервер-сервер**, CORS не используется.
 
 ---
 

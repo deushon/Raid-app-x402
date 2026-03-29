@@ -3,6 +3,9 @@
 # 2. Отредактируйте WorkingDirectory, User, ExecStart (путь к node: which node), при необходимости EnvironmentFile.
 # 3. sudo systemctl daemon-reload && sudo systemctl enable --now x402-raid-app
 # 4. sudo systemctl status x402-raid-app
+#
+# mDNS (MDNS_ENABLED=true): нужен multicast UDP 5353; при проблемах проверьте firewall.
+# В Docker для mDNS обычно требуется network_mode: host для сервиса приложения.
 
 [Unit]
 Description=x402 Raid App (Node.js)

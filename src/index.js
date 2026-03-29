@@ -27,12 +27,15 @@ const {
 const { ensureTeleoperatorSchema } = require('./db/ensureTeleoperatorSchema');
 const { ensureTeleopHelpSchema } = require('./db/ensureTeleopHelpSchema');
 const { ensureRobotSchema } = require('./db/ensureRobotSchema');
+const { ensureTeleoperatorRobotGrantsSchema } = require('./db/ensureTeleoperatorRobotGrantsSchema');
 const { createRobotRepository } = require('./services/robotRepository');
+const { createTeleoperatorRobotGrantRepository } = require('./services/teleoperatorRobotGrantRepository');
 const createTeleopHelpRouter = require('./routes/teleopHelp');
 const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
 const { attachTeleopWebSockets } = require('./ws/teleopServer');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
+const { startMdnsAdvertisement } = require('./services/mdnsAdvertisement');
 
 const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
@@ -68,6 +71,7 @@ const bootstrap = async () => {
       await ensureTeleoperatorSchema(pool);
       await ensureTeleopHelpSchema(pool);
       await ensureRobotSchema(pool);
+      await ensureTeleoperatorRobotGrantsSchema(pool);
     } catch (error) {
       logger.error('Failed to ensure database schema', { error: error.message });
       await pool.end().catch(() => {});
@@ -86,6 +90,7 @@ const bootstrap = async () => {
   await registry.loadFromPersistence();
   const commandRouter = createCommandRouter({ config, registry, x402Service });
   const teleopHub = pool ? createTeleopOperatorHub() : null;
+  const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
 
   const app = express();
   if (config.server.trustProxy) {
@@ -101,6 +106,7 @@ const bootstrap = async () => {
         'Authorization',
         'X-Requested-With',
         'X-Robot-Teleop-Secret',
+        'X-Robot-Fleet-Secret',
       ],
     }),
   );
@@ -160,6 +166,7 @@ const bootstrap = async () => {
         teleopHub,
         attachTeleopUser,
         requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
+        grantRepository,
       }),
     );
   }
@@ -217,7 +224,10 @@ const bootstrap = async () => {
     });
   });
 
-  app.use('/api/robots', createRobotsRouter({ registry }));
+  app.use(
+    '/api/robots',
+    createRobotsRouter({ registry, config, adminConfig: config.admin }),
+  );
   app.use('/api/commands', createCommandsRouter({ commandRouter }));
   app.use('/api/client', createClientRouter({
     registry,
@@ -228,7 +238,16 @@ const bootstrap = async () => {
     getSettings: settingsStore.getSettings,
     saveSettings: settingsStore.saveSettings,
   }));
-  app.use('/api/admin', createAdminRouter({ settingsStore, adminConfig: config.admin }));
+  app.use(
+    '/api/admin',
+    createAdminRouter({
+      settingsStore,
+      adminConfig: config.admin,
+      registry,
+      pool,
+      config,
+    }),
+  );
 
   /**
    * @openapi
@@ -295,6 +314,7 @@ const bootstrap = async () => {
     });
   }
 
+  let mdnsHandle = { stop: () => {} };
   const serverInstance = httpServer.listen(server.port, server.host, () => {
     logger.info('x402 Raid App server started', {
       host: server.host,
@@ -303,7 +323,9 @@ const bootstrap = async () => {
       teleoperatorEnabled: Boolean(pool),
       teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
       robotsPersisted: Boolean(robotRepository),
+      mdns: Boolean(config.mdns?.enabled),
     });
+    mdnsHandle = startMdnsAdvertisement({ mdns: config.mdns, port: server.port });
     setImmediate(() => {
       for (const robot of registry.list()) {
         registry.refreshRobot(robot.id).catch((error) => {
@@ -314,6 +336,14 @@ const bootstrap = async () => {
         });
       }
     });
+  });
+
+  serverInstance.on('close', () => {
+    try {
+      mdnsHandle.stop();
+    } catch {
+      /* ignore */
+    }
   });
 
   return serverInstance;

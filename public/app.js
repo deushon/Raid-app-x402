@@ -37,24 +37,24 @@ const api = {
   },
 
   listRobots() {
-    return this.request('/api/robots');
+    return this.request('/api/admin/robots');
   },
 
   addRobot(data) {
-    return this.request('/api/robots', {
+    return this.request('/api/admin/robots', {
       method: 'POST',
       body: data,
     });
   },
 
   refreshRobot(id) {
-    return this.request(`/api/robots/${id}/refresh`, {
+    return this.request(`/api/admin/robots/${id}/refresh`, {
       method: 'POST',
     });
   },
 
   deleteRobot(id) {
-    return fetch(`/api/robots/${id}`, {
+    return fetch(`/api/admin/robots/${id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -302,6 +302,8 @@ robotForm.addEventListener('submit', async (event) => {
   const formData = new FormData(robotForm);
   const rosbridgePortRaw = formData.get('rosbridgePort');
   const teleopSecretRaw = formData.get('teleopSecret');
+  const enrollmentKeyRaw = formData.get('enrollmentKey');
+  const operatorRegistryUrlRaw = formData.get('operatorRegistryUrl');
   const rosbridgeHostRaw = formData.get('rosbridgeHost');
   const payload = {
     name: formData.get('name') || undefined,
@@ -316,6 +318,12 @@ robotForm.addEventListener('submit', async (event) => {
       : {}),
     ...(teleopSecretRaw && String(teleopSecretRaw).trim()
       ? { teleopSecret: String(teleopSecretRaw).trim() }
+      : {}),
+    ...(enrollmentKeyRaw && String(enrollmentKeyRaw).trim()
+      ? { enrollmentKey: String(enrollmentKeyRaw).trim() }
+      : {}),
+    ...(operatorRegistryUrlRaw && String(operatorRegistryUrlRaw).trim()
+      ? { operatorRegistryUrl: String(operatorRegistryUrlRaw).trim() }
       : {}),
   };
 

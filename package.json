@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./src/index.js",
     "dev": "nodemon ./src/index.js",
-    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js test/teleop-help-http.test.js test/robot-registry-db.test.js test/teleop-rosbridge-forward.test.js test/teleop-ws-connect.test.js test/teleop-config.test.js test/cors-api.test.js test/admin-http.test.js test/robots-http.test.js test/openapi-servers.test.js test/env-bom.test.js"
+    "test": "node --test test/teleoperator-repository.test.js test/teleoperator-http.test.js test/teleop-help-http.test.js test/robot-registry-db.test.js test/teleop-rosbridge-forward.test.js test/teleop-ws-connect.test.js test/teleop-config.test.js test/cors-api.test.js test/admin-http.test.js test/robots-http.test.js test/robot-operator-sync.test.js test/openapi-servers.test.js test/env-bom.test.js"
   },
   "keywords": [
     "x402",
@@ -19,6 +19,7 @@
     "@solana/web3.js": "^1.98.4",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
+    "bonjour-service": "^1.3.0",
     "bs58": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

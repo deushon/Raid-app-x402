@@ -1,23 +1,12 @@
 const express = require('express');
-const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { constantTimeCompare } = require('../utils/secretCompare');
 const {
   createHelpRequest,
-  listOpenHelpRequests,
+  listOpenHelpRequestsForTeleoperator,
+  getOpenHelpRequestMeta,
   acceptHelpRequest,
 } = require('../services/teleopHelpRepository');
-
-function constantTimeCompare(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') {
-    return false;
-  }
-  const ba = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ba.length !== bb.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(ba, bb);
-}
 
 function readRobotTeleopSecret(req) {
   const h = req.headers['x-robot-teleop-secret'];
@@ -38,6 +27,7 @@ function readRobotTeleopSecret(req) {
  * @param {object} deps.teleopHub - hub from createTeleopOperatorHub()
  * @param {import('express').RequestHandler} deps.attachTeleopUser
  * @param {import('express').RequestHandler} deps.requireTeleopSession
+ * @param {ReturnType<import('../services/teleoperatorRobotGrantRepository').createTeleoperatorRobotGrantRepository>|null} [deps.grantRepository]
  */
 function createTeleopHelpRouter({
   pool,
@@ -45,6 +35,7 @@ function createTeleopHelpRouter({
   teleopHub,
   attachTeleopUser,
   requireTeleopSession,
+  grantRepository = null,
 }) {
   const router = express.Router();
 
@@ -55,7 +46,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. If an open request already exists for this robot, returns that request with duplicate=true.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. If an open request already exists for this robot, returns that request with duplicate=true. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -123,7 +114,14 @@ function createTeleopHelpRouter({
           duplicate,
         },
       };
-      teleopHub.broadcast(event);
+      let allowedIds = null;
+      if (grantRepository) {
+        const grantCount = await grantRepository.countActiveGrantsForRobot(robotId);
+        if (grantCount > 0) {
+          allowedIds = await grantRepository.listActiveTeleoperatorIdsForRobot(robotId);
+        }
+      }
+      teleopHub.broadcastHelpRequest(event, { allowedTeleoperatorIds: allowedIds });
 
       const statusCode = duplicate ? 200 : 201;
       return res.status(statusCode).json({
@@ -152,19 +150,20 @@ function createTeleopHelpRouter({
    *   get:
    *     tags:
    *       - Teleop
-   *     summary: List open help requests
+   *     summary: List open help requests visible to the current operator
+   *     description: Includes open requests for robots with no active teleoperator_robot_grants (any logged-in operator), and for robots where this operator has an active grant.
    *     security:
    *       - TeleoperatorCookie: []
    *       - TeleoperatorBearer: []
    *     responses:
    *       200:
-   *         description: Open help requests (newest last in array; sorted by created_at ASC).
+   *         description: Open help requests (sorted by created_at ASC).
    *       401:
    *         description: Not authenticated.
    */
-  teleopOnly.get('/teleoperator/help-requests', async (req, res) => {
+  teleopOnly.get('/help-requests', async (req, res) => {
     try {
-      const rows = await listOpenHelpRequests(pool);
+      const rows = await listOpenHelpRequestsForTeleoperator(pool, req.teleopUser.id);
       return res.json({
         helpRequests: rows.map((row) => ({
           id: row.id,
@@ -202,12 +201,30 @@ function createTeleopHelpRouter({
    *         description: Session created; use WebSocket /ws/teleop/session/{sessionId}?token=JWT
    *       401:
    *         description: Not authenticated.
+   *       403:
+   *         description: Operator has no grant for this robot (when the robot has at least one active grant).
    *       409:
    *         description: Request already claimed or not open.
    */
-  teleopOnly.post('/teleoperator/help-requests/:id/accept', async (req, res) => {
+  teleopOnly.post('/help-requests/:id/accept', async (req, res) => {
     try {
       const teleoperatorId = req.teleopUser.id;
+      const meta = await getOpenHelpRequestMeta(pool, req.params.id);
+      if (!meta) {
+        return res.status(409).json({ error: 'Help request is not open or was already claimed' });
+      }
+      if (grantRepository) {
+        const grantCount = await grantRepository.countActiveGrantsForRobot(meta.robot_id);
+        if (grantCount > 0) {
+          const allowed = await grantRepository.hasActiveGrant({
+            teleoperatorId,
+            robotId: meta.robot_id,
+          });
+          if (!allowed) {
+            return res.status(403).json({ error: 'Operator not authorized for this robot' });
+          }
+        }
+      }
       const result = await acceptHelpRequest(pool, {
         requestId: req.params.id,
         teleoperatorId,
@@ -234,7 +251,8 @@ function createTeleopHelpRouter({
     }
   });
 
-  router.use(teleopOnly);
+  // Mount only under /teleoperator so /api/robots/* (e.g. enroll) is not caught by requireTeleopSession.
+  router.use('/teleoperator', teleopOnly);
 
   return router;
 }

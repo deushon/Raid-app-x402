@@ -23,9 +23,14 @@ const swaggerDefinition = {
     {
       name: 'Teleop',
       description:
-        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (shared secret), not the operator JWT. **Operator JWT** (same as teleoperator session) is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. Pass the same token as **`?token=`** on WebSockets `/ws/teleoperator` (help events) and `/ws/teleop/session/{sessionId}` (duplex ROSBridge proxy). JWT lifetime: see tag **Teleoperator**.',
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
     },
     { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
+    {
+      name: 'RobotFleet',
+      description:
+        '**ROBOT_FLEET_ENROLLMENT_SECRET** as `Authorization: Bearer <secret>` or header **X-Robot-Fleet-Secret**. Used for `POST /api/robots/enroll` and (with admin) mutating `/api/robots` when the secret is configured.',
+    },
   ],
   // Relative base so Swagger "Try it out" hits the same host/port as the /docs page.
   // A fixed http://localhost:3000 breaks when /docs is opened via LAN IP (fetch goes to the client PC).
@@ -61,6 +66,18 @@ const swaggerDefinition = {
         type: 'http',
         scheme: 'basic',
         description: 'ADMIN_USERNAME / ADMIN_PASSWORD (optional; for scripts and curl).',
+      },
+      RobotFleetBearer: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'fleet-secret',
+        description: 'Same value as **ROBOT_FLEET_ENROLLMENT_SECRET** (not a JWT).',
+      },
+      RobotFleetHeader: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Robot-Fleet-Secret',
+        description: 'Same value as **ROBOT_FLEET_ENROLLMENT_SECRET**.',
       },
     },
     schemas: {
@@ -101,6 +118,7 @@ const swaggerDefinition = {
       },
       Robot: {
         type: 'object',
+        description: 'Full robot record (includes teleopSecret). Admin **GET /api/admin/robots** and enroll/POST responses.',
         properties: {
           id: { type: 'string', format: 'uuid' },
           name: { type: 'string', example: 'Robo-1' },
@@ -112,8 +130,17 @@ const swaggerDefinition = {
           teleopSecret: {
             type: 'string',
             nullable: true,
-            description:
-              'Shared secret for POST /api/robots/{id}/teleop/help. Currently included in GET /api/robots and other robot JSON responses; treat as sensitive.',
+            description: 'Per-robot secret for POST /api/robots/{id}/teleop/help. Omitted from public GET /api/robots.',
+          },
+          enrollmentKey: {
+            type: 'string',
+            nullable: true,
+            description: 'Stable id for fleet self-enrollment upsert (POST /api/robots/enroll).',
+          },
+          operatorRegistryUrl: {
+            type: 'string',
+            nullable: true,
+            description: 'Optional full URL on the robot for allowlist sync (see docs/ROBOT_OPERATOR_SYNC.md).',
           },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
@@ -125,6 +152,48 @@ const swaggerDefinition = {
               lat: { type: 'number', example: 55.7522 },
               lng: { type: 'number', example: 37.6156 },
             },
+          },
+        },
+      },
+      RobotPublic: {
+        type: 'object',
+        description: 'Robot as returned by **GET /api/robots** (no teleopSecret).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          name: { type: 'string' },
+          host: { type: 'string' },
+          port: { type: 'integer' },
+          requiresX402: { type: 'boolean' },
+          rosbridgeHost: { type: 'string' },
+          rosbridgePort: { type: 'integer' },
+          enrollmentKey: { type: 'string', nullable: true },
+          operatorRegistryUrl: { type: 'string', nullable: true },
+          status: { $ref: '#/components/schemas/RobotHealthStatus' },
+          lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
+          location: { type: 'object', nullable: true },
+        },
+      },
+      RobotEnrollRequest: {
+        type: 'object',
+        required: ['enrollmentKey', 'host', 'port'],
+        properties: {
+          enrollmentKey: {
+            type: 'string',
+            description: 'Stable hardware/device id; same key updates the same robot row.',
+          },
+          name: { type: 'string' },
+          host: { type: 'string' },
+          port: { type: 'integer' },
+          requiresX402: { type: 'boolean' },
+          rosbridgeHost: { type: 'string' },
+          rosbridgePort: { type: 'integer' },
+          teleopSecret: {
+            type: 'string',
+            description: 'Optional; if omitted, server generates and returns one.',
+          },
+          operatorRegistryUrl: {
+            type: 'string',
+            description: 'Optional allowlist endpoint URL on the robot.',
           },
         },
       },
@@ -140,9 +209,10 @@ const swaggerDefinition = {
           rosbridgePort: { type: 'integer', example: 9090 },
           teleopSecret: {
             type: 'string',
-            description:
-              'Shared secret for POST /api/robots/{id}/teleop/help; echoed in GET /api/robots and robot responses until restricted.',
+            description: 'Shared secret for POST /api/robots/{id}/teleop/help.',
           },
+          enrollmentKey: { type: 'string', description: 'Optional stable key (prefer POST /api/robots/enroll for upsert).' },
+          operatorRegistryUrl: { type: 'string', description: 'Optional; see docs/ROBOT_OPERATOR_SYNC.md' },
         },
       },
       DanceCommandRequest: {

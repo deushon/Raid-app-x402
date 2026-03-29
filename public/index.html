@@ -11,6 +11,9 @@
     <header>
       <div class="admin-header-row">
         <h1>x402 Raid Control Panel</h1>
+        <nav class="admin-nav-links">
+          <a href="/ui/teleop-access.html">Teleop access</a>
+        </nav>
         <button id="admin-logout" type="button" class="admin-logout-btn">Log out</button>
       </div>
       <p>
@@ -67,6 +70,14 @@
           <label>
             Teleop secret (for POST …/teleop/help)
             <input name="teleopSecret" type="password" placeholder="LAN shared secret" autocomplete="off" />
+          </label>
+          <label>
+            Enrollment key (optional, stable device id)
+            <input name="enrollmentKey" placeholder="robot-serial-or-mac" autocomplete="off" />
+          </label>
+          <label>
+            Operator registry URL (optional)
+            <input name="operatorRegistryUrl" type="url" placeholder="http://robot:8080/api/raid/operators" />
           </label>
           <button type="submit">Add Robot</button>
         </form>

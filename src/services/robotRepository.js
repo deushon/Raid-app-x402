@@ -1,4 +1,16 @@
 /**
+ * Strip secrets for public API responses.
+ * @param {object} robot
+ */
+function toPublicRobot(robot) {
+  if (!robot || typeof robot !== 'object') {
+    return robot;
+  }
+  const { teleopSecret: _t, ...rest } = robot;
+  return rest;
+}
+
+/**
  * @param {import('pg').Pool} pool
  */
 function createRobotRepository(pool) {
@@ -8,10 +20,25 @@ function createRobotRepository(pool) {
      */
     async listAll() {
       const r = await pool.query(
-        `SELECT id, name, host, port, requires_x402, rosbridge_host, rosbridge_port, teleop_secret
+        `SELECT id, name, host, port, requires_x402, rosbridge_host, rosbridge_port, teleop_secret,
+                enrollment_key, operator_registry_url
          FROM robots ORDER BY created_at ASC`,
       );
       return r.rows;
+    },
+
+    /**
+     * @param {string} enrollmentKey
+     * @returns {Promise<import('pg').QueryResultRow|null>}
+     */
+    async findByEnrollmentKey(enrollmentKey) {
+      const r = await pool.query(
+        `SELECT id, name, host, port, requires_x402, rosbridge_host, rosbridge_port, teleop_secret,
+                enrollment_key, operator_registry_url
+         FROM robots WHERE enrollment_key = $1 LIMIT 1`,
+        [enrollmentKey],
+      );
+      return r.rows[0] || null;
     },
 
     /**
@@ -19,8 +46,9 @@ function createRobotRepository(pool) {
      */
     async insert(robot) {
       await pool.query(
-        `INSERT INTO robots (id, name, host, port, requires_x402, rosbridge_host, rosbridge_port, teleop_secret)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO robots (id, name, host, port, requires_x402, rosbridge_host, rosbridge_port, teleop_secret,
+                            enrollment_key, operator_registry_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           robot.id,
           robot.name,
@@ -30,6 +58,10 @@ function createRobotRepository(pool) {
           robot.rosbridgeHost,
           robot.rosbridgePort,
           robot.teleopSecret,
+          robot.enrollmentKey != null && robot.enrollmentKey !== '' ? String(robot.enrollmentKey) : null,
+          robot.operatorRegistryUrl != null && robot.operatorRegistryUrl !== ''
+            ? String(robot.operatorRegistryUrl)
+            : null,
         ],
       );
     },
@@ -47,6 +79,8 @@ function createRobotRepository(pool) {
            rosbridge_host = $6,
            rosbridge_port = $7,
            teleop_secret = $8,
+           enrollment_key = $9,
+           operator_registry_url = $10,
            updated_at = NOW()
          WHERE id = $1`,
         [
@@ -58,6 +92,10 @@ function createRobotRepository(pool) {
           robot.rosbridgeHost,
           robot.rosbridgePort,
           robot.teleopSecret,
+          robot.enrollmentKey != null && robot.enrollmentKey !== '' ? String(robot.enrollmentKey) : null,
+          robot.operatorRegistryUrl != null && robot.operatorRegistryUrl !== ''
+            ? String(robot.operatorRegistryUrl)
+            : null,
         ],
       );
     },
@@ -85,6 +123,9 @@ function rowToRobot(row) {
     rosbridgeHost: row.rosbridge_host,
     rosbridgePort: row.rosbridge_port,
     teleopSecret: row.teleop_secret != null ? String(row.teleop_secret) : null,
+    enrollmentKey: row.enrollment_key != null ? String(row.enrollment_key) : null,
+    operatorRegistryUrl:
+      row.operator_registry_url != null ? String(row.operator_registry_url) : null,
     status: {
       state: 'unknown',
       message: 'Awaiting health check',
@@ -96,4 +137,4 @@ function rowToRobot(row) {
   };
 }
 
-module.exports = { createRobotRepository, rowToRobot };
+module.exports = { createRobotRepository, rowToRobot, toPublicRobot };

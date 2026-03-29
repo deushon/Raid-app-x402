@@ -11,7 +11,13 @@ test('CORS preflight reflects Origin and allows Authorization', async () => {
       origin: true,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'X-Robot-Teleop-Secret',
+        'X-Robot-Fleet-Secret',
+      ],
     }),
   );
   app.post('/api/teleoperator/login', (req, res) => {

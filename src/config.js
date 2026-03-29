@@ -194,6 +194,25 @@ const loadConfig = (argv = []) => {
       commandTimeoutMs: toNumber(args['robot-command-timeout'] || process.env.ROBOT_COMMAND_TIMEOUT_MS, 8000),
       defaultHealthEndpoint: args['robot-health-endpoint'] || process.env.ROBOT_HEALTH_ENDPOINT || '/health',
       defaultSecureHealthEndpoint: args['robot-secure-health-endpoint'] || process.env.ROBOT_SECURE_HEALTH_ENDPOINT || '/helth',
+      /** Shared secret robots use to enroll / fleet-authenticated writes (trimmed; empty = disabled for enroll) */
+      fleetEnrollmentSecret: (() => {
+        const v = process.env.ROBOT_FLEET_ENROLLMENT_SECRET;
+        if (v === undefined || v === null) return null;
+        const t = String(v).trim();
+        return t || null;
+      })(),
+      /** Optional: RAID authenticates to robot operator-registry HTTP API (see docs/ROBOT_OPERATOR_SYNC.md) */
+      raidToRobotSecret: (() => {
+        const v = process.env.RAID_TO_ROBOT_SECRET;
+        if (v === undefined || v === null) return null;
+        const t = String(v).trim();
+        return t || null;
+      })(),
+    },
+    mdns: {
+      enabled: parseEnvBool(process.env.MDNS_ENABLED, false),
+      /** mDNS instance name → other hosts resolve as `<name>.local` (bonjour-service) */
+      hostname: (process.env.MDNS_HOSTNAME || 'raid-app').trim() || 'raid-app',
     },
     database: {
       url: process.env.DATABASE_URL || null,
