@@ -342,5 +342,7 @@ module.exports = {
   buildSolanaRpcUrl,
   HELIUS_MAINNET_URL,
   PUBLIC_RPC_URL,
+  PEAQ_AGUNG_HTTP_DEFAULT,
+  PEAQ_AGUNG_WSS_DEFAULT,
 };
 
