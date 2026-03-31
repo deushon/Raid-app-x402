@@ -1,6 +1,6 @@
 /**
  * Public repo policy: no Cyrillic (or other non-ASCII script leakage) in committed sources.
- * Chat with maintainers may be Russian; repository text must stay English (see AGENTS.md).
+ * Repository committed text must stay English (see CONTRIBUTING.md).
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -57,7 +57,7 @@ const TEXT_EXT = new Set([
 
 const ROOT_TEXT_FILES = new Set([
   'README.md',
-  'AGENTS.md',
+  'CONTRIBUTING.md',
   'package.json',
   'package-lock.json',
   'docker-compose.yml',
@@ -118,6 +118,6 @@ test('no Cyrillic characters in tracked-style source tree', () => {
   assert.equal(
     hits.length,
     0,
-    hits.length ? `Cyrillic found (move to English; see AGENTS.md):\n${hits.join('\n')}` : '',
+    hits.length ? `Cyrillic found (move to English; see CONTRIBUTING.md):\n${hits.join('\n')}` : '',
   );
 });

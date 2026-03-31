@@ -278,7 +278,7 @@ Host with Postgres only from compose (port **5434** on localhost) uses in `.env`
 DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
 ```
 
-**Locale guard:** `test/no-cyrillic-in-repo.test.js` fails if Cyrillic appears under `src/`, `public/`, `docs/`, `config/`, etc. (public repo policy; see [AGENTS.md](AGENTS.md)). Local `.env` is not scanned.
+**Locale guard:** `test/no-cyrillic-in-repo.test.js` fails if Cyrillic appears under `src/`, `public/`, `docs/`, `config/`, etc. (public repo policy; see [CONTRIBUTING.md](CONTRIBUTING.md)). Local `.env` is not scanned.
 
 Tests **do not read** `DATABASE_URL`: integration suites use only **`TEST_DATABASE_URL`**. If unset, those tests are skipped and `npm test` still passes. Example using the same DB as in `config/env.example` (do **not** point at production — tests **`TRUNCATE`**):
 
@@ -294,14 +294,22 @@ npm test
 - Strategy changes without code: `COMMAND_DANCE_STRATEGY`, `COMMAND_BUY_COLA_STRATEGY`, `PRICING_MARKUP_PERCENT`.
 - Production: protect public API with keys/auth, change `ADMIN_PASSWORD`, use persistent registry instead of memory-only.
 
-## Documentation for developers and AI agents
+## Documentation index
 
-- [AGENTS.md](AGENTS.md) — contribution rules for automated assistants (README, Swagger, tests, commits, language policy).
+- [CONTRIBUTING.md](CONTRIBUTING.md) — language policy, OpenAPI, tests, and commit expectations for this repo.
+- [docs/CLIENT_UI.md](docs/CLIENT_UI.md) — public `/client` UI: modes, wallet, API usage.
+- [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md) — x402 client flow and robot **402** retry.
+- [docs/RAID_APP_TELEOP_HELP_SPEC.md](docs/RAID_APP_TELEOP_HELP_SPEC.md) — robot **`POST …/teleop/help`** body (`message`, `metadata`, `situation_report`, Peaq context).
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` from the robot (`teleop_fetch`) and WS/rosbridge.
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — **`payload.metadata.situation_report`** for VR/operator UI.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
-- [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — robot dev: Task Router → KYR call order, SessionGrant, `trusted_raid_keys`, fixing `pending_from_raid` and missing operator payment.
-- [docs/SPRINT_SEMAPHORE_X402_RAID_APP.md](docs/SPRINT_SEMAPHORE_X402_RAID_APP.md) — sprint semaphore / test alignment (receipts/incidents/KYR stats vs this repo’s scope).
+- [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — operator allowlist push to the robot (`RAID_TO_ROBOT_SECRET`, `X-Raid-To-Robot-Secret`).
+- [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — Task Router → KYR: SessionGrant, `trusted_raid_keys`, `pending_from_raid`, operator payment.
+- [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md) — full teleop + x402 + SessionGrant cycle.
+- [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md) — Peaq claim on help requests (Agung / dev).
+- [docs/RAID_APP_DATASET_PROXY_SPEC.md](docs/RAID_APP_DATASET_PROXY_SPEC.md) — operator dataset HTTP proxy **`/api/teleop/robots/{id}/dataset/*`**.
+- [docs/DATA_NODE_OPERATOR_SESSION_SPEC.md](docs/DATA_NODE_OPERATOR_SESSION_SPEC.md) — DATA_NODE multipart / session metadata (adjacent ingest pipeline; robot uploads).
+- [docs/SPRINT_SEMAPHORE_X402_RAID_APP.md](docs/SPRINT_SEMAPHORE_X402_RAID_APP.md) — sprint deliverables vs this repo’s scope.
 
 ## Public repository and secrets
 

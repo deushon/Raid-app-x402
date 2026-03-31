@@ -1,5 +1,7 @@
 # DATA NODE: operator session metadata and upload multipart
 
+**Index:** [README.md](../README.md#documentation-index) — this document describes an **adjacent** ingest pipeline, not the Task-router-x402 HTTP API surface.
+
 **Audience:** developers of DATA_NODE (ingest from robot).  
 **Version:** 2026-03-29 — extended teleop session fields (`acceptedAtUtcIso`, `teleopControl`, multipart `operatorSessionMeta`).  
 **Robot implementation:** `br-vr-dev-sinc` (`upload_models.py`, `episode_recorder.py`, `dataset_upload_server.py`).
@@ -20,7 +22,7 @@ The multipart part **`operatorSessionMeta`** duplicates a subset of those fields
 
 ---
 
-## 2. Quest / client JSON: `POST /upload_dataset` (robot port 9191 or RAID proxy)
+## 2. Quest / client JSON: `POST /upload_dataset` (robot port 9191 or Task Router dataset proxy)
 
 Optional top-level fields (backward compatible with clients that omit them):
 

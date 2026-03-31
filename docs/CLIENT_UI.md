@@ -1,5 +1,7 @@
 # Client UI for Task-router-x402
 
+**Index:** [README.md](../README.md#documentation-index).
+
 ## Overview
 
 Public interface for external users with Solana wallet payments and two operation modes.

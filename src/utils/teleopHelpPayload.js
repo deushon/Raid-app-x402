@@ -138,7 +138,7 @@ function coerceMetadataString(v) {
 }
 
 /**
- * Normalize robot POST …/teleop/help body per RAID_APP_TELEOP_HELP_SPEC.md.
+ * Normalize robot POST …/teleop/help body per docs/RAID_APP_TELEOP_HELP_SPEC.md.
  * `message` must be a string (caller validates).
  * Missing `metadata` or keys → empty strings; extra keys preserved under `metadata`.
  * `situation_report` truncated at MAX_SITUATION_REPORT_BYTES UTF-8 with a warning log.
