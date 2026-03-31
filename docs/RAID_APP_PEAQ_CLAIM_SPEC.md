@@ -1,9 +1,9 @@
 # RAID App: peaq claim for teleop (Agung / dev)
 
 **Audience:** developers of **Task-router-x402** (`task-router-x402`, Node.js).  
-**Robot-side:** `rospy_x402` sends KYR issuance context in `POST …/teleop/help` and fetches a claim via `GET …/peaq/claim`. Peaq SDK usage ([Onboard a Machine](https://docs.peaq.xyz/build/first-depin/onboard-machine), [DID Operations](https://docs.peaq.xyz/sdk-reference/javascript/did-operations)) runs **on RAID**, not on the robot.
+**Robot-side:** `rospy_x402` sends KYR issuance context in `POST …/teleop/help` and fetches a claim via `GET …/peaq/claim`. Peaq SDK usage ([Onboard a Machine](https://docs.peaq.xyz/build/first-depin/onboard-machine), [DID Operations](https://docs.peaq.xyz/sdk-reference/javascript/did-operations)) runs **on Task-router-x402**, not on the robot.
 
-**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_SPEC.md) (package `rospy_x402`), [DATA_NODE_PEAQ_CLAIM_SPEC.md](DATA_NODE_PEAQ_CLAIM_SPEC.md).
+**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (this repo), [RAID_APP_TELEOP_HELP_SPEC.md in `rospy_x402`](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_SPEC.md) (on-robot package, if present in your workspace).
 
 ---
 

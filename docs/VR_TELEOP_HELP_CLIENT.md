@@ -31,4 +31,4 @@ Summary: help requests now include structured context and **`situation_report`**
 ## API reference
 
 - OpenAPI: **Teleop** tag, **`RobotTeleopHelpRequest`** schema, **`POST /api/robots/{robotId}/teleop/help`**.
-- Robot → HTTP spec: [RAID_APP_TELEOP_HELP_SPEC.md](../RAID_APP_TELEOP_HELP_SPEC.md).
+- Robot → HTTP spec: [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md).

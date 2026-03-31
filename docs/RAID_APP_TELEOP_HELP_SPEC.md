@@ -1,5 +1,7 @@
 # RAID App — `POST …/teleop/help` extension (`situation_report` field)
 
+**Index:** [README.md](../README.md#documentation-index) lists all specs.
+
 **Audience:** Task-router-x402 developers (`task-router-x402` or equivalent).  
 **On-robot source:** `rospy_x402` package, `EscalationManager._request_grant_from_raid` → HTTP `POST` to the URL below.
 
