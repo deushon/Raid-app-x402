@@ -216,7 +216,8 @@ const loadConfig = (argv = []) => {
     mdns: {
       enabled: parseEnvBool(process.env.MDNS_ENABLED, false),
       /** mDNS instance name → other hosts resolve as `<name>.local` (bonjour-service) */
-      hostname: (process.env.MDNS_HOSTNAME || 'task-router-x402').trim() || 'task-router-x402',
+      /** Default `raid-app` keeps LAN mDNS hostname stable for existing robot configs (`http://raid-app.local:PORT`). */
+      hostname: (process.env.MDNS_HOSTNAME || 'raid-app').trim() || 'raid-app',
     },
     database: {
       url: process.env.DATABASE_URL || null,

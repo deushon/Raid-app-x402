@@ -2,6 +2,8 @@
 
 For an AI agent or human **extending robot software** (ROS node, `teleop_fetch`, systemd, nginx in front of rosbridge, etc.). Describes **how Task-router-x402 works today** and **contracts the robot must follow**. Sources: `task-router-x402` repository (branch/deploy with your team).
 
+**Stability:** rebranding does not change HTTP contracts. See [ROBOT_INTEGRATION_STABILITY.md](ROBOT_INTEGRATION_STABILITY.md) for identifiers that must stay compatible with deployed robots.
+
 ---
 
 ## 1. Roles and boundaries
@@ -29,7 +31,7 @@ Agree with the fleet operator on values from Task Router `.env` (robots do not i
 | (optional) Allowlist URL | Value for **`operatorRegistryUrl`** on enroll | Full URL of your robot `POST` handler; Task Router calls it on sync (see §7). |
 | (optional) **`RAID_TO_ROBOT_SECRET`** (same string) | `RAID_TO_ROBOT_SECRET` in Task Router `.env` | Validate **`X-Raid-To-Robot-Secret`** on your allowlist handler. |
 
-**Discovering Task Router host:** with **`MDNS_ENABLED`** and **`MDNS_HOSTNAME`** (e.g. `task-router-x402`) on the server, LAN may use **`http://task-router-x402.local:<PORT>`** instead of IP. Docker + bridge often breaks mDNS — confirm with deploy team.
+**Discovering Task Router host:** with **`MDNS_ENABLED`**, default **`MDNS_HOSTNAME`** is **`raid-app`** → **`http://raid-app.local:<PORT>`** (stable for existing robot configs). Set **`MDNS_HOSTNAME`** explicitly if you use another `.local` name. Docker + bridge often breaks mDNS — confirm with deploy team.
 
 ---
 
