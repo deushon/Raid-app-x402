@@ -38,6 +38,10 @@ async function ensureTeleopHelpSchema(pool) {
     ON teleop_sessions(teleoperator_id)
     WHERE ended_at IS NULL;
   `);
+  await pool.query(`
+    ALTER TABLE help_requests
+    ADD COLUMN IF NOT EXISTS peaq_claim JSONB;
+  `);
 }
 
 module.exports = { ensureTeleopHelpSchema };

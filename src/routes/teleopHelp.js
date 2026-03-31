@@ -1,4 +1,5 @@
 const express = require('express');
+const { validate: validateUuid } = require('uuid');
 const logger = require('../utils/logger');
 const { constantTimeCompare } = require('../utils/secretCompare');
 const {
@@ -6,8 +7,34 @@ const {
   listOpenHelpRequestsForTeleoperator,
   getOpenHelpRequestMeta,
   acceptHelpRequest,
+  updateHelpRequestPeaqClaim,
+  getHelpRequestForRobotClaim,
 } = require('../services/teleopHelpRepository');
-const { normalizeRobotTeleopHelpBody } = require('../utils/teleopHelpPayload');
+const {
+  normalizeRobotTeleopHelpBody,
+  KyrPeaqContextTooLargeError,
+  KyrPeaqContextInvalidError,
+} = require('../utils/teleopHelpPayload');
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+const PEAQ_RACE_TIMEOUT = Symbol('peaqRaceTimeout');
+
+/**
+ * @param {import('pg').Pool} pool
+ * @param {{ buildClaim: Function }} peaqClaimService
+ * @param {string} helpRequestId
+ * @param {string} robotId
+ */
+async function persistPeaqClaim(pool, peaqClaimService, helpRequestId, robotId) {
+  const claim = await peaqClaimService.buildClaim({ helpRequestId, robotId });
+  await updateHelpRequestPeaqClaim(pool, { helpRequestId, claim });
+  return claim;
+}
 
 function readRobotTeleopSecret(req) {
   const h = req.headers['x-robot-teleop-secret'];
@@ -29,6 +56,8 @@ function readRobotTeleopSecret(req) {
  * @param {import('express').RequestHandler} deps.attachTeleopUser
  * @param {import('express').RequestHandler} deps.requireTeleopSession
  * @param {ReturnType<import('../services/teleoperatorRobotGrantRepository').createTeleoperatorRobotGrantRepository>|null} [deps.grantRepository]
+ * @param {{ isEnabled: () => boolean, buildClaim: (input: { helpRequestId: string, robotId: string }) => Promise<object> }|null} [deps.peaqClaimService]
+ * @param {number} [deps.peaqClaimSyncTimeoutMs]
  */
 function createTeleopHelpRouter({
   pool,
@@ -37,6 +66,8 @@ function createTeleopHelpRouter({
   attachTeleopUser,
   requireTeleopSession,
   grantRepository = null,
+  peaqClaimService = null,
+  peaqClaimSyncTimeoutMs = 2500,
 }) {
   const router = express.Router();
 
@@ -47,7 +78,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -67,11 +98,13 @@ function createTeleopHelpRouter({
    *       201:
    *         description: New help request created (same body shape as 200).
    *       400:
-   *         description: Invalid JSON body (e.g. missing or non-string `message`).
+   *         description: Invalid JSON body (e.g. missing or non-string `message`, or invalid `kyr_peaq_context` type).
    *       401:
    *         description: Missing or invalid robot secret.
    *       404:
    *         description: Robot not found in registry.
+   *       413:
+   *         description: metadata.kyr_peaq_context JSON exceeds 64 KiB.
    */
   router.post('/robots/:robotId/teleop/help', async (req, res) => {
     try {
@@ -99,6 +132,26 @@ function createTeleopHelpRouter({
         payload,
       });
 
+      let peaq_claim = null;
+      if (peaqClaimService && peaqClaimService.isEnabled()) {
+        if (row.peaq_claim) {
+          peaq_claim = row.peaq_claim;
+        } else {
+          const timeoutMs = peaqClaimSyncTimeoutMs;
+          const buildPromise = persistPeaqClaim(pool, peaqClaimService, row.id, robotId).catch((err) => {
+            logger.error('peaq claim build failed', { error: err.message, helpRequestId: row.id });
+            return null;
+          });
+          const raced = await Promise.race([
+            buildPromise,
+            sleep(timeoutMs).then(() => PEAQ_RACE_TIMEOUT),
+          ]);
+          if (raced !== PEAQ_RACE_TIMEOUT && raced != null) {
+            peaq_claim = raced;
+          }
+        }
+      }
+
       const event = {
         type: 'help_request',
         data: {
@@ -120,7 +173,8 @@ function createTeleopHelpRouter({
       teleopHub.broadcastHelpRequest(event, { allowedTeleoperatorIds: allowedIds });
 
       const statusCode = duplicate ? 200 : 201;
-      return res.status(statusCode).json({
+      const jsonBody = {
+        id: row.id,
         helpRequest: {
           id: row.id,
           robotId: row.robot_id,
@@ -129,10 +183,93 @@ function createTeleopHelpRouter({
           createdAt: row.created_at,
         },
         duplicate,
-      });
+      };
+      if (peaq_claim != null) {
+        jsonBody.peaq_claim = peaq_claim;
+      }
+      return res.status(statusCode).json(jsonBody);
     } catch (error) {
+      if (error instanceof KyrPeaqContextTooLargeError) {
+        return res.status(413).json({ error: error.message });
+      }
+      if (error instanceof KyrPeaqContextInvalidError) {
+        return res.status(400).json({ error: error.message });
+      }
       logger.error('teleop help create failed', { error: error.message });
       return res.status(500).json({ error: 'Failed to create help request' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/robots/{robotId}/peaq/claim:
+   *   get:
+   *     tags:
+   *       - Teleop
+   *     summary: Fetch peaq claim for a help request (robot secret)
+   *     description: >
+   *       Same authentication as POST teleop/help (header X-Robot-Teleop-Secret or Bearer).
+   *       Query helpRequestId must match the id from the help response.
+   *       Returns 404 with error claim_not_ready until the claim is stored (e.g. async did.read after POST).
+   *     parameters:
+   *       - in: path
+   *         name: robotId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: query
+   *         name: helpRequestId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Claim available.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 peaq_claim:
+   *                   $ref: '#/components/schemas/PeaqClaim'
+   *       400:
+   *         description: Missing or invalid helpRequestId.
+   *       401:
+   *         description: Invalid or missing robot secret.
+   *       404:
+   *         description: Robot not found, help request not found for this robot, or claim not ready yet.
+   */
+  router.get('/robots/:robotId/peaq/claim', async (req, res) => {
+    try {
+      const { robotId } = req.params;
+      const robot = registry.getById(robotId);
+      if (!robot) {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
+      if (!robot.teleopSecret) {
+        return res.status(401).json({ error: 'Teleop secret not configured for this robot' });
+      }
+      const secret = readRobotTeleopSecret(req);
+      if (!secret || !constantTimeCompare(secret, robot.teleopSecret)) {
+        return res.status(401).json({ error: 'Invalid or missing X-Robot-Teleop-Secret' });
+      }
+      const helpRequestId = req.query.helpRequestId;
+      if (helpRequestId == null || helpRequestId === '') {
+        return res.status(400).json({ error: 'helpRequestId query parameter is required' });
+      }
+      if (typeof helpRequestId !== 'string' || !validateUuid(helpRequestId)) {
+        return res.status(400).json({ error: 'helpRequestId must be a valid UUID' });
+      }
+      const rec = await getHelpRequestForRobotClaim(pool, { helpRequestId, robotId });
+      if (!rec || rec.peaq_claim == null) {
+        return res.status(404).json({ error: 'claim_not_ready' });
+      }
+      return res.json({ peaq_claim: rec.peaq_claim });
+    } catch (error) {
+      logger.error('peaq claim fetch failed', { error: error.message });
+      return res.status(500).json({ error: 'Failed to fetch peaq claim' });
     }
   });
 

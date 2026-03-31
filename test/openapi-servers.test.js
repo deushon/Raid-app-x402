@@ -16,6 +16,13 @@ test('OpenAPI defines RobotTeleopHelpRequest with situation_report', () => {
   assert.ok(schema);
   assert.ok(schema.required.includes('message'));
   assert.ok(schema.properties.metadata.properties.situation_report);
+  assert.ok(schema.properties.metadata.properties.kyr_peaq_context);
+});
+
+test('OpenAPI defines PeaqClaim and GET /api/robots/{robotId}/peaq/claim', () => {
+  assert.ok(swaggerSpec.components.schemas.PeaqClaim);
+  assert.ok(swaggerSpec.paths['/api/robots/{robotId}/peaq/claim']);
+  assert.ok(swaggerSpec.paths['/api/robots/{robotId}/peaq/claim'].get);
 });
 
 test('OpenAPI documents teleoperator JWT lifetime and where it is required', () => {

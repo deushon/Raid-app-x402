@@ -31,6 +31,7 @@ const { ensureTeleoperatorRobotGrantsSchema } = require('./db/ensureTeleoperator
 const { createRobotRepository } = require('./services/robotRepository');
 const { createTeleoperatorRobotGrantRepository } = require('./services/teleoperatorRobotGrantRepository');
 const createTeleopHelpRouter = require('./routes/teleopHelp');
+const { createPeaqClaimService } = require('./services/peaqClaimService');
 const { createTeleopDatasetProxyMiddleware } = require('./services/teleopDatasetProxy');
 const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
 const { attachTeleopWebSockets } = require('./ws/teleopServer');
@@ -91,6 +92,7 @@ const bootstrap = async () => {
   await registry.loadFromPersistence();
   const commandRouter = createCommandRouter({ config, registry, x402Service });
   const teleopHub = pool ? createTeleopOperatorHub() : null;
+  const peaqClaimService = createPeaqClaimService(config.peaq);
   const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
 
   const attachTeleopUser = pool ? createAttachTeleopUser(config.teleoperator) : null;
@@ -184,6 +186,8 @@ const bootstrap = async () => {
         attachTeleopUser,
         requireTeleopSession: requireTeleopSessionJson,
         grantRepository,
+        peaqClaimService,
+        peaqClaimSyncTimeoutMs: config.peaq.claimSyncTimeoutMs,
       }),
     );
   }

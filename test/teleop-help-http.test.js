@@ -68,6 +68,19 @@ run('teleop help HTTP', () => {
     const attachTeleopUser = createAttachTeleopUser(teleopCfg.teleoperator);
     const teleopHub = createTeleopOperatorHub();
 
+    const mockPeaqClaimService = {
+      isEnabled: () => true,
+      buildClaim: async ({ helpRequestId, robotId }) => ({
+        schema_version: 1,
+        network: 'peaq-agung',
+        help_request_id: helpRequestId,
+        robot_id: robotId,
+        issued_at_unix: 1700000000,
+        document: { id: 'did:peaq:0xtest' },
+        raw: {},
+      }),
+    };
+
     app = express();
     app.use(cookieParser());
     app.use(express.json());
@@ -82,6 +95,8 @@ run('teleop help HTTP', () => {
         attachTeleopUser,
         requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
         grantRepository,
+        peaqClaimService: mockPeaqClaimService,
+        peaqClaimSyncTimeoutMs: 30000,
       }),
     );
     app.use(
@@ -182,10 +197,12 @@ run('teleop help HTTP', () => {
     const r1 = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'help' })
       .expect(201);
     const r2 = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'help again' })
       .expect(200);
     assert.equal(r2.body.duplicate, true);
     assert.equal(r2.body.helpRequest.id, r1.body.helpRequest.id);
@@ -205,6 +222,7 @@ run('teleop help HTTP', () => {
     const h = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'help' })
       .expect(201);
 
     const w1 = Keypair.generate().publicKey.toBase58();
@@ -238,6 +256,7 @@ run('teleop help HTTP', () => {
     const h = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'help' })
       .expect(201);
 
     const w1 = Keypair.generate().publicKey.toBase58();
@@ -299,10 +318,12 @@ run('teleop help HTTP', () => {
     await request(app)
       .post(`/api/robots/${rGranted.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'granted robot' })
       .expect(201);
     const hOpen = await request(app)
       .post(`/api/robots/${rOpen.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'open robot' })
       .expect(201);
 
     const l1 = await a1.get('/api/teleoperator/help-requests').expect(200);
@@ -372,5 +393,135 @@ run('teleop help HTTP', () => {
     const rows = await grantRepository.listActive();
     assert.equal(rows.length, 1);
     assert.equal(rows[0].teleoperator_login, 'listgrantuser');
+  });
+
+  test('help response includes top-level id, peaq_claim; GET peaq/claim with secret', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65525,
+      teleopSecret,
+    });
+    const resHelp = await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({
+        message: 'peaq help',
+        metadata: {
+          task_id: 't1',
+          error_context: '',
+          kyr_peaq_context: { schema_version: 1, robot_id: 'r1' },
+        },
+      })
+      .expect(201);
+    assert.equal(resHelp.body.id, resHelp.body.helpRequest.id);
+    assert.ok(resHelp.body.peaq_claim);
+    assert.equal(resHelp.body.peaq_claim.help_request_id, resHelp.body.helpRequest.id);
+    assert.deepEqual(resHelp.body.helpRequest.payload.metadata.kyr_peaq_context, {
+      schema_version: 1,
+      robot_id: 'r1',
+    });
+
+    await request(app)
+      .get(`/api/robots/${reg.id}/peaq/claim`)
+      .expect(401);
+
+    const badUuid = await request(app)
+      .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=not-a-uuid`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(400);
+    assert.match(String(badUuid.body.error || ''), /uuid/i);
+
+    const rnd = '00000000-0000-4000-8000-000000000001';
+    const miss = await request(app)
+      .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=${rnd}`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(404);
+    assert.equal(miss.body.error, 'claim_not_ready');
+
+    const ok = await request(app)
+      .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=${resHelp.body.helpRequest.id}`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(200);
+    assert.ok(ok.body.peaq_claim);
+    assert.equal(ok.body.peaq_claim.network, 'peaq-agung');
+  });
+
+  test('POST help 413 when kyr_peaq_context JSON exceeds 64 KiB', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65524,
+      teleopSecret,
+    });
+    const blob = 'x'.repeat(70000);
+    await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({
+        message: 'm',
+        metadata: { kyr_peaq_context: { blob } },
+      })
+      .expect(413);
+  });
+
+  test('GET peaq/claim 404 when peaq disabled (no stored claim)', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65523,
+      teleopSecret,
+    });
+
+    const localApp = express();
+    localApp.use(express.json());
+    localApp.use(cookieParser());
+    const teleopCfgLocal = {
+      teleoperator: {
+        jwtSecret: 'test-secret-key-for-jwt-signing',
+        jwtExpiresIn: '1h',
+        cookieName: 'teleop_token',
+        bcryptRounds: 4,
+        cookieSecureMode: 'never',
+      },
+    };
+    const attachLocal = createAttachTeleopUser(teleopCfgLocal.teleoperator);
+    localApp.use(
+      '/api',
+      createTeleopHelpRouter({
+        pool,
+        registry,
+        teleopHub: createTeleopOperatorHub(),
+        attachTeleopUser: attachLocal,
+        requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
+        grantRepository,
+        peaqClaimService: { isEnabled: () => false, buildClaim: async () => ({}) },
+        peaqClaimSyncTimeoutMs: 2500,
+      }),
+    );
+
+    const h = await request(localApp)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'no peaq' })
+      .expect(201);
+    assert.equal(h.body.peaq_claim, undefined);
+
+    await request(localApp)
+      .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=${h.body.helpRequest.id}`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(404);
   });
 });

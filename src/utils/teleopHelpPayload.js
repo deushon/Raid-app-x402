@@ -3,6 +3,101 @@ const logger = require('./logger');
 /** Max UTF-8 bytes for `metadata.situation_report` (spec: ~32–64 KiB). */
 const MAX_SITUATION_REPORT_BYTES = 65536;
 
+/** Max UTF-8 bytes for serialized `metadata.kyr_peaq_context` and stored `peaq_claim` (RAID_APP_PEAQ_CLAIM_SPEC §6). */
+const MAX_KYR_PEAQ_CONTEXT_BYTES = 65536;
+const MAX_PEAQ_CLAIM_JSON_BYTES = 65536;
+
+class KyrPeaqContextInvalidError extends Error {
+  constructor(message = 'metadata.kyr_peaq_context must be a plain object when provided') {
+    super(message);
+    this.name = 'KyrPeaqContextInvalidError';
+    this.httpStatus = 400;
+  }
+}
+
+class KyrPeaqContextTooLargeError extends Error {
+  constructor() {
+    super('metadata.kyr_peaq_context exceeds maximum JSON size (64 KiB)');
+    this.name = 'KyrPeaqContextTooLargeError';
+    this.httpStatus = 413;
+  }
+}
+
+/**
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isPlainObject(v) {
+  return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
+ * UTF-8 byte length of JSON.stringify(value).
+ * @param {unknown} value
+ * @returns {number}
+ */
+function jsonUtf8ByteLength(value) {
+  return Buffer.byteLength(JSON.stringify(value), 'utf8');
+}
+
+/**
+ * @param {Record<string, unknown>} metadata - raw metadata object (before normalization)
+ */
+function assertKyrPeaqContextSize(metadata) {
+  if (!Object.prototype.hasOwnProperty.call(metadata, 'kyr_peaq_context')) {
+    return;
+  }
+  const ctx = metadata.kyr_peaq_context;
+  if (ctx == null) {
+    return;
+  }
+  if (!isPlainObject(ctx)) {
+    throw new KyrPeaqContextInvalidError();
+  }
+  if (jsonUtf8ByteLength(ctx) > MAX_KYR_PEAQ_CONTEXT_BYTES) {
+    throw new KyrPeaqContextTooLargeError();
+  }
+}
+
+/**
+ * Ensure `peaq_claim` JSON fits §6 size cap (drops `raw`, then shrinks `document`).
+ * @param {Record<string, unknown>} claim
+ * @param {number} [maxBytes]
+ * @returns {Record<string, unknown>}
+ */
+function truncatePeaqClaimJson(claim, maxBytes = MAX_PEAQ_CLAIM_JSON_BYTES) {
+  if (!isPlainObject(claim)) {
+    return claim;
+  }
+  if (jsonUtf8ByteLength(claim) <= maxBytes) {
+    return claim;
+  }
+  const base = {
+    schema_version: claim.schema_version,
+    network: claim.network,
+    help_request_id: claim.help_request_id,
+    robot_id: claim.robot_id,
+    issued_at_unix: claim.issued_at_unix,
+    document: claim.document,
+    raw: {},
+  };
+  if (jsonUtf8ByteLength(base) <= maxBytes) {
+    return base;
+  }
+  const doc =
+    isPlainObject(claim.document) && claim.document
+      ? {
+          id: claim.document.id,
+          controller: claim.document.controller,
+        }
+      : {};
+  const minimal = { ...base, document: doc };
+  if (jsonUtf8ByteLength(minimal) <= maxBytes) {
+    return minimal;
+  }
+  return { ...minimal, document: {} };
+}
+
 /**
  * Truncate a string so its UTF-8 byte length is at most `maxBytes`, without splitting a code point.
  * @param {string} str
@@ -52,6 +147,8 @@ function normalizeRobotTeleopHelpBody(body) {
       ? { ...body.metadata }
       : {};
 
+  assertKyrPeaqContextSize(rawMeta);
+
   const task_id = coerceMetadataString(rawMeta.task_id);
   const error_context = coerceMetadataString(rawMeta.error_context);
   let situation_report = coerceMetadataString(rawMeta.situation_report);
@@ -82,6 +179,12 @@ function normalizeRobotTeleopHelpBody(body) {
 
 module.exports = {
   MAX_SITUATION_REPORT_BYTES,
+  MAX_KYR_PEAQ_CONTEXT_BYTES,
+  MAX_PEAQ_CLAIM_JSON_BYTES,
+  KyrPeaqContextInvalidError,
+  KyrPeaqContextTooLargeError,
   normalizeRobotTeleopHelpBody,
   truncateUtf8,
+  truncatePeaqClaimJson,
+  jsonUtf8ByteLength,
 };

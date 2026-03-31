@@ -2,8 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MAX_SITUATION_REPORT_BYTES,
+  MAX_KYR_PEAQ_CONTEXT_BYTES,
   normalizeRobotTeleopHelpBody,
   truncateUtf8,
+  truncatePeaqClaimJson,
+  KyrPeaqContextTooLargeError,
+  KyrPeaqContextInvalidError,
 } = require('../src/utils/teleopHelpPayload');
 
 test('normalizeRobotTeleopHelpBody fills metadata strings and preserves extra keys', () => {
@@ -47,4 +51,44 @@ test('situation_report truncated at MAX_SITUATION_REPORT_BYTES', () => {
     metadata: { task_id: '', error_context: '', situation_report: report },
   });
   assert.equal(Buffer.byteLength(out.metadata.situation_report, 'utf8'), MAX_SITUATION_REPORT_BYTES);
+});
+
+test('kyr_peaq_context must be plain object', () => {
+  assert.throws(
+    () =>
+      normalizeRobotTeleopHelpBody({
+        message: 'm',
+        metadata: { kyr_peaq_context: 'not-an-object' },
+      }),
+    KyrPeaqContextInvalidError,
+  );
+});
+
+test('kyr_peaq_context over MAX_KYR_PEAQ_CONTEXT_BYTES throws', () => {
+  const inner = 'y'.repeat(MAX_KYR_PEAQ_CONTEXT_BYTES + 2);
+  assert.throws(
+    () =>
+      normalizeRobotTeleopHelpBody({
+        message: 'm',
+        metadata: { kyr_peaq_context: { inner } },
+      }),
+    KyrPeaqContextTooLargeError,
+  );
+});
+
+test('truncatePeaqClaimJson shrinks oversized claim', () => {
+  const huge = 'z'.repeat(80000);
+  const claim = {
+    schema_version: 1,
+    network: 'peaq-agung',
+    help_request_id: '550e8400-e29b-41d4-a716-446655440000',
+    robot_id: '660e8400-e29b-41d4-a716-446655440000',
+    issued_at_unix: 1,
+    document: { id: 'did:peaq:x', controller: 'did:peaq:x', extra: huge },
+    raw: { x: huge },
+  };
+  const out = truncatePeaqClaimJson(claim);
+  assert.ok(Buffer.byteLength(JSON.stringify(out), 'utf8') <= 65536);
+  assert.equal(out.schema_version, 1);
+  assert.equal(out.network, 'peaq-agung');
 });

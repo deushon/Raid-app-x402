@@ -8,14 +8,14 @@ async function createHelpRequest(pool, { robotId, payload }) {
     const r = await pool.query(
       `INSERT INTO help_requests (robot_id, status, payload)
        VALUES ($1, 'open', $2)
-       RETURNING id, robot_id, status, payload, created_at, claimed_by, claimed_at`,
+       RETURNING id, robot_id, status, payload, created_at, claimed_by, claimed_at, peaq_claim`,
       [robotId, payload ?? null],
     );
     return { row: r.rows[0], duplicate: false };
   } catch (error) {
     if (error.code === '23505') {
       const existing = await pool.query(
-        `SELECT id, robot_id, status, payload, created_at, claimed_by, claimed_at
+        `SELECT id, robot_id, status, payload, created_at, claimed_by, claimed_at, peaq_claim
          FROM help_requests WHERE robot_id = $1 AND status = 'open' LIMIT 1`,
         [robotId],
       );
@@ -154,6 +154,31 @@ async function endTeleopSession(pool, sessionId) {
   return true;
 }
 
+/**
+ * @param {import('pg').Pool} pool
+ * @param {{ helpRequestId: string, claim: object }} input
+ */
+async function updateHelpRequestPeaqClaim(pool, { helpRequestId, claim }) {
+  await pool.query(`UPDATE help_requests SET peaq_claim = $2 WHERE id = $1::uuid`, [
+    helpRequestId,
+    claim,
+  ]);
+}
+
+/**
+ * Help request row for robot claim fetch (any status; must match robot_id).
+ * @param {import('pg').Pool} pool
+ * @param {{ helpRequestId: string, robotId: string }} input
+ * @returns {Promise<{ peaq_claim: object | null } | null>}
+ */
+async function getHelpRequestForRobotClaim(pool, { helpRequestId, robotId }) {
+  const r = await pool.query(
+    `SELECT peaq_claim FROM help_requests WHERE id = $1::uuid AND robot_id = $2`,
+    [helpRequestId, robotId],
+  );
+  return r.rows[0] || null;
+}
+
 module.exports = {
   createHelpRequest,
   listOpenHelpRequests,
@@ -162,4 +187,6 @@ module.exports = {
   acceptHelpRequest,
   getActiveSessionForOperator,
   endTeleopSession,
+  updateHelpRequestPeaqClaim,
+  getHelpRequestForRobotClaim,
 };
