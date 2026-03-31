@@ -36,7 +36,7 @@ Recommended path: call **`POST /api/robots/enroll`** once (and when IP/host chan
 
 Response: full robot object including **`id`** (store as **`robotId`**) and **`teleopSecret`**. Repeat with the same **`enrollmentKey`** updates the row (same **`id`**).
 
-**Discovering `TASK_ROUTER_HOST`:** e.g. **`http://task-router-x402.local:3000`** when mDNS is enabled on the server (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, see README).
+**Discovering `TASK_ROUTER_HOST`:** with default mDNS, **`http://raid-app.local:3000`** (default **`MDNS_HOSTNAME=raid-app`**). If the operator sets **`MDNS_HOSTNAME`**, use **`http://<that-name>.local:<PORT>`** instead. See README and [ROBOT_INTEGRATION_STABILITY.md](ROBOT_INTEGRATION_STABILITY.md).
 
 ---
 

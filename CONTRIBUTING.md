@@ -10,7 +10,8 @@ Public contributor expectations. Keep **README.md** and **config/env.example** a
 ## API contract
 
 - OpenAPI is built with **swagger-jsdoc** (`src/docs/swagger.js` + `**@openapi**` on routers).
-- When you add, remove, or change a public HTTP endpoint, update the matching JSDoc block and `components.schemas` if needed. Verify **Swagger UI** `/docs` and **JSON** `/docs-json**.
+- When you add, remove, or change a public HTTP endpoint, update the matching JSDoc block and `components.schemas` if needed. Verify **Swagger UI** `/docs` and **JSON** `/docs-json`.
+- **Robot-facing paths, headers, and JSON field names** used in production integrations are **stability-sensitive**. See [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md); do not rename them for branding alone.
 
 ## Tests
 

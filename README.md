@@ -162,7 +162,7 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | **`ROBOT_FLEET_ENROLLMENT_SECRET`** | Shared fleet secret: `Authorization: Bearer …` or **`X-Robot-Fleet-Secret`** on **`POST /api/robots/enroll`** and (with admin) mutating **`/api/robots/*`**. Without it enroll returns **503**. Wrong secret: **401** with **`Invalid or missing fleet credential`**. If enroll returns only **`{"error":"Unauthorized"}`** with DB enabled — upgrade the app (route ordering with teleoperator was fixed). |
 | **`RAID_TO_ROBOT_SECRET`** | Secret for HTTP **POST** to the robot’s **`operatorRegistryUrl`** (operator id push); see [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
 | **`MDNS_ENABLED`** | `true` / `1` / `yes` / `on` — enable mDNS (UDP 5353, multicast). |
-| **`MDNS_HOSTNAME`** | Instance name (default `task-router-x402`); on LAN usually **`<name>.local`**. On success logs show **`mDNS advertisement started`**; on error, LAN advertisement failed. In Docker **bridge** mode, multicast may not reach other hosts even if start succeeds — use **host network** for `app` or access by IP. |
+| **`MDNS_HOSTNAME`** | Instance name (default **`raid-app`**, unchanged for **robot/LAN compatibility** — many stacks use `http://raid-app.local:<PORT>`). Override for a different `.local` name (e.g. `task-router-x402`). On success logs show **`mDNS advertisement started`**; on error, LAN advertisement failed. In Docker **bridge** mode, multicast may not reach other hosts even if start succeeds — use **host network** for `app` or access by IP. |
 
 ## API (short)
 
@@ -264,6 +264,12 @@ Full request/response details: **Swagger** (`/docs`). In-app x402 details: [docs
 
 Example `availableMethods` objects appear in older README revisions or in `swagger.js` (`RobotHealthStatus`).
 
+## Robot integration contract (stability)
+
+The product name **Task-router-x402** and npm package **`task-router-x402`** are **branding and repo layout** only. **Robot, KYR, and operator clients** must keep working without code changes on the robot when you upgrade this service.
+
+**Do not rename or repurpose** wire-level identifiers without a major version / migration plan: HTTP paths, header names, JSON field names used in APIs and Peaq fallbacks, fleet/teleop secrets, and the default **mDNS** hostname (**`raid-app`**). Details and a checklist: [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md).
+
 ## Scripts
 
 ```bash
@@ -302,6 +308,7 @@ npm test
 - [docs/RAID_APP_TELEOP_HELP_SPEC.md](docs/RAID_APP_TELEOP_HELP_SPEC.md) — robot **`POST …/teleop/help`** body (`message`, `metadata`, `situation_report`, Peaq context).
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` from the robot (`teleop_fetch`) and WS/rosbridge.
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — **`payload.metadata.situation_report`** for VR/operator UI.
+- [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md) — **stable vs cosmetic** naming; what robots and KYR must not break on upgrade.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
 - [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — operator allowlist push to the robot (`RAID_TO_ROBOT_SECRET`, `X-Raid-To-Robot-Secret`).
 - [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — Task Router → KYR: SessionGrant, `trusted_raid_keys`, `pending_from_raid`, operator payment.
