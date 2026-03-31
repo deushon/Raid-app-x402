@@ -138,6 +138,15 @@ npm run dev                  # nodemon
 | **`PEAQ_NETWORK`** | Метка сети в JSON claim (по умолчанию **`peaq-agung`**). |
 | **`PEAQ_CLAIM_SYNC_TIMEOUT_MS`** | Мс: если **`did.read`** укладывается в этот интервал, **`peaq_claim`** может вернуться сразу в **POST …/teleop/help**; иначе клейм дописывается в фоне и забирается через **GET …/peaq/claim** (по умолчанию **2500**). |
 
+**Онбординг machine DID на Agung (вручную, до интеграции в enroll робота):** скрипт [`scripts/peaqOnboardMachine.js`](scripts/peaqOnboardMachine.js). Нужен кошелёк с тестовым PEAQ на Agung на газ.
+
+```bash
+npm run peaq:onboard -- --dry-run
+PEAQ_ONBOARD_EVM_PRIVATE_KEY=0x... npm run peaq:onboard
+```
+
+В stdout будут **`PEAQ_MACHINE_DID_NAME`** и **`PEAQ_MACHINE_EVM_ADDRESS`** — вставьте в `.env` RAID. Ключ **`PEAQ_ONBOARD_EVM_PRIVATE_KEY`** только для отправки транзакции; в runtime RAID для **`did.read`** ключ не нужен. Экспорт **`onboardPeaqMachine`** из скрипта можно позже вызывать из кода регистрации робота.
+
 Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js). Для HTTP-прокси датасета на робот дополнительно ставятся **`X-Forwarded-For`**, **`X-Forwarded-Proto`**, **`X-Teleoperator-Id`** (и при наличии **`X-Teleoperator-Login`**); см. [`src/services/teleopDatasetProxy.js`](src/services/teleopDatasetProxy.js).
 
 ### Роботы: секрет флота, mDNS, синхронизация allowlist

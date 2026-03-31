@@ -61,6 +61,7 @@
 | [src/services/teleoperatorRepository.js](src/services/teleoperatorRepository.js) | Пользователи телеоператора в БД (bcrypt, Solana pubkey)   |
 | [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | `help_requests`, `teleop_sessions`; колонка **`peaq_claim`** |
 | [src/services/peaqClaimService.js](src/services/peaqClaimService.js) | Peaq SDK **`did.read`**, объект **`peaq_claim`** для help / GET claim |
+| [scripts/peaqOnboardMachine.js](scripts/peaqOnboardMachine.js) | Разовый **`did.create`** + **`sendEvmTx`** на Agung; экспорт **`onboardPeaqMachine`** для будущего enroll робота |
 | [src/docs/swagger.js](src/docs/swagger.js)       | База OpenAPI и общие схемы для JSDoc                                             |
 | [src/services/](src/services/)                   | Реестр, health, команды, x402, платежи, выбор исполнителя, настройки             |
 
