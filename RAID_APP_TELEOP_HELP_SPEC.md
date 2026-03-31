@@ -1,19 +1,19 @@
-# RAID App — расширение `POST …/teleop/help` (поле `situation_report`)
+# RAID App — `POST …/teleop/help` extension (`situation_report` field)
 
-**Аудитория:** разработчики RAID App (`x402_raid_app` или эквивалент).  
-**Источник на роботе:** пакет `rospy_x402`, `EscalationManager._request_grant_from_raid` → HTTP `POST` на URL ниже.
+**Audience:** RAID App developers (`x402_raid_app` or equivalent).  
+**On-robot source:** `rospy_x402` package, `EscalationManager._request_grant_from_raid` → HTTP `POST` to the URL below.
 
-## Эндпоинт и заголовки (без изменений)
+## Endpoint and headers (unchanged)
 
-- **Метод:** `POST`
-- **Путь:** `/api/robots/{robotId}/teleop/help` (`robotId` — UUID из enroll).
-- **Заголовки:**
+- **Method:** `POST`
+- **Path:** `/api/robots/{robotId}/teleop/help` (`robotId` — UUID from enroll).
+- **Headers:**
   - `Content-Type: application/json`
-  - `X-Robot-Teleop-Secret` — секрет робота из enroll
+  - `X-Robot-Teleop-Secret` — robot secret from enroll
 
-## Тело запроса JSON
+## JSON request body
 
-Робот отправляет объект вида:
+The robot sends an object like:
 
 ```json
 {
@@ -26,31 +26,31 @@
 }
 ```
 
-| Поле | Обязательность | Описание |
-|------|----------------|----------|
-| `message` | да | Краткая метка (как раньше). |
-| `metadata` | да | Объект с контекстом заявки. |
-| `metadata.task_id` | да | Идентификатор задачи / сессии на стороне робота. |
-| `metadata.error_context` | да | Строка (часто JSON) с машиночитаемыми деталями ошибки; может быть пустой. |
-| `metadata.situation_report` | **новое**, рекомендуется | Свободный текст UTF-8: **текущее состояние робота**, **что делал недавно**, **почему нужен телеоператор**. Может быть длинным (тысячи символов). Старые клиенты могут не слать ключ — трактовать как `""`. |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `message` | yes | Short label (as before). |
+| `metadata` | yes | Object with request context. |
+| `metadata.task_id` | yes | Task / session id on the robot side. |
+| `metadata.error_context` | yes | String (often JSON) with machine-readable error details; may be empty. |
+| `metadata.situation_report` | **new**, recommended | Free UTF-8 text: **current robot state**, **recent actions**, **why an operator is needed**. May be long (thousands of characters). Legacy clients may omit the key — treat as `""`. |
 
-## Что сделать на стороне RAID
+## RAID-side work
 
-1. **Принять** `metadata.situation_report` в теле `POST …/teleop/help` (парсинг JSON).
-2. **Сохранить** в модели заявки о помощи (help request) и отдавать в UI/API оператору вместе с `task_id` / `error_context`.
-3. **Обратная совместимость:** если поля нет — не падать; считать пустой строкой.
-4. **Ограничения (рекомендация):** лимит длины на уровне API/БД (например 32–64 KiB), при превышении — `413` или обрезка с пометкой в логе — по политике продукта.
-5. **Кодировка:** UTF-8; не интерпретировать как HTML без экранирования в UI.
+1. **Accept** `metadata.situation_report` in `POST …/teleop/help` (JSON parse).
+2. **Persist** it on the help request model and return it to the operator UI/API together with `task_id` / `error_context`.
+3. **Backward compatibility:** if the field is missing — do not fail; treat as empty string.
+4. **Limits (recommendation):** cap length at API/DB level (e.g. 32–64 KiB), on overflow return `413` or truncate with a log note — per product policy.
+5. **Encoding:** UTF-8; do not treat as HTML without escaping in the UI.
 
-## Связанный ROS API на роботе
+## Related ROS API on the robot
 
-Сервис `rospy_x402/RequestHelp` (`/x402/request_help`): поле `situation_report` дублируется в `metadata.situation_report` HTTP-запроса.
+Service `rospy_x402/RequestHelp` (`/x402/request_help`): `situation_report` is mirrored to `metadata.situation_report` in the HTTP request.
 
-Документация робота: [RAID_INTEGRATION.md](RAID_INTEGRATION.md).
+Robot documentation: [RAID_INTEGRATION.md](RAID_INTEGRATION.md).
 
-## Реализация в RAID App (`x402_raid_app`)
+## Implementation in RAID App (`x402_raid_app`)
 
-- Парсинг и нормализация: [`src/utils/teleopHelpPayload.js`](src/utils/teleopHelpPayload.js), маршрут [`src/routes/teleopHelp.js`](src/routes/teleopHelp.js).
-- **`situation_report`**: хранится в JSON **`payload`** заявки в БД; отдаётся в **`GET /api/teleoperator/help-requests`**, в ответе **`POST …/teleop/help`**, в WS-событии **`help_request`** (`data.payload`).
-- Лимит длины: **65536** байт UTF-8; при превышении — обрезка по границе кодпоинта и запись предупреждения в лог.
-- Для VR / Quest / Unity-клиента оператора см. [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).
+- Parse/normalize: [`src/utils/teleopHelpPayload.js`](src/utils/teleopHelpPayload.js), route [`src/routes/teleopHelp.js`](src/routes/teleopHelp.js).
+- **`situation_report`**: stored in JSON **`payload`** on the DB row; returned from **`GET /api/teleoperator/help-requests`**, **`POST …/teleop/help`**, and WS event **`help_request`** (`data.payload`).
+- Length limit: **65536** UTF-8 bytes; overflow truncates on code-point boundary with a warning log.
+- For VR / Quest / Unity operator clients see [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).

@@ -1,34 +1,34 @@
-# Teleop help: изменения для VR / Quest / Unity (операторский клиент)
+# Teleop help: changes for VR / Quest / Unity (operator client)
 
-Кратко: в заявке о помощи появился структурированный контекст и поле **`situation_report`**. URL, JWT и сценарий «список → accept → WebSocket» **не менялись**.
+Summary: help requests now include structured context and **`situation_report`**. URLs, JWT, and the flow “list → accept → WebSocket” are **unchanged**.
 
-## Что поменялось
+## What changed
 
-1. **Робот** при вызове **`POST /api/robots/{robotId}/teleop/help`** теперь (по контракту) шлёт тело вида:
-   - **`message`** — строка (краткая метка).
-   - **`metadata.task_id`**, **`metadata.error_context`** — строки (`error_context` может быть пустой).
-   - **`metadata.situation_report`** — опционально, длинный UTF-8 текст: что робот делал, в каком состоянии, зачем нужен оператор.
+1. The **robot** calling **`POST /api/robots/{robotId}/teleop/help`** should (per contract) send a body with:
+   - **`message`** — string (short label).
+   - **`metadata.task_id`**, **`metadata.error_context`** — strings (`error_context` may be empty).
+   - **`metadata.situation_report`** — optional long UTF-8 text: what the robot was doing, state, why an operator is needed.
 
-2. **Сервер RAID** всегда нормализует заявку: в **`payload`** попадают **`message`** и **`metadata`** с тремя строковыми полями выше. Если робот не прислал `situation_report` или весь `metadata`, недостающие значения будут **пустыми строками** `""`.
+2. **RAID** always normalizes the request: **`payload`** contains **`message`** and **`metadata`** with the three string fields above. If the robot omits `situation_report` or all of `metadata`, missing values become **empty strings** `""`.
 
-3. **Длина `situation_report`** на сервере ограничена **65536 байтами** в кодировке UTF-8; хвост обрезается без ошибки для клиента.
+3. **`situation_report`** length on the server is capped at **65536** UTF-8 bytes; the tail is truncated without an error for the client.
 
-## Что сделать в VR-клиенте
+## VR client changes
 
-| Источник | Действие |
-| --- | --- |
-| **`GET /api/teleoperator/help-requests`** | Читать контекст из **`helpRequests[i].payload`**: показывать **`payload.message`**, **`payload.metadata.task_id`**, **`payload.metadata.error_context`**, при необходимости — **`payload.metadata.situation_report`** (основной текст для оператора). |
-| **WebSocket** `…/ws/teleoperator?token=…`, событие **`help_request`** | То же: текст в **`data.payload`** (тот же объект, что в списке заявок). |
-| **Отображение** | Считать **`situation_report`** обычным текстом (UTF-8). **Не** вставлять в UI как HTML без экранирования. |
-| **Совместимость** | Старые заявки в БД могли иметь другую форму **`payload`**. Используйте безопасный доступ: например `payload?.metadata?.situation_report ?? ""`. |
+| Source | Action |
+|--------|--------|
+| **`GET /api/teleoperator/help-requests`** | Read context from **`helpRequests[i].payload`**: show **`payload.message`**, **`payload.metadata.task_id`**, **`payload.metadata.error_context`**, and when useful **`payload.metadata.situation_report`** (main text for the operator). |
+| **WebSocket** `…/ws/teleoperator?token=…`, event **`help_request`** | Same: text in **`data.payload`** (same object as in the list). |
+| **Rendering** | Treat **`situation_report`** as plain text (UTF-8). **Do not** inject into the UI as HTML without escaping. |
+| **Compatibility** | Older rows may have a different **`payload`** shape. Use safe access, e.g. `payload?.metadata?.situation_report ?? ""`. |
 
-## Без изменений
+## Unchanged
 
-- Авторизация оператора (JWT / cookie).
-- Пути **`POST /api/teleoperator/help-requests/{id}/accept`** и **`/ws/teleop/session/{sessionId}?token=`**.
-- Правила **grants** (`teleoperator_robot_grants`) для видимости заявок.
+- Operator auth (JWT / cookie).
+- Paths **`POST /api/teleoperator/help-requests/{id}/accept`** and **`/ws/teleop/session/{sessionId}?token=`**.
+- **Grant** rules (`teleoperator_robot_grants`) for request visibility.
 
-## Справка по API
+## API reference
 
-- OpenAPI: тег **Teleop**, схема **`RobotTeleopHelpRequest`**, **`POST /api/robots/{robotId}/teleop/help`**.
-- Спецификация робота → HTTP: [RAID_APP_TELEOP_HELP_SPEC.md](../RAID_APP_TELEOP_HELP_SPEC.md).
+- OpenAPI: **Teleop** tag, **`RobotTeleopHelpRequest`** schema, **`POST /api/robots/{robotId}/teleop/help`**.
+- Robot → HTTP spec: [RAID_APP_TELEOP_HELP_SPEC.md](../RAID_APP_TELEOP_HELP_SPEC.md).

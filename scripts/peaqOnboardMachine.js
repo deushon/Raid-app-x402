@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Онбординг machine DID на Peaq Agung (EVM): sdk.did.create + Sdk.sendEvmTx.
- * Отдельный тестовый/операционный модуль; далее логику можно вызывать из enroll робота.
+ * Onboard a machine DID on Peaq Agung (EVM): sdk.did.create + Sdk.sendEvmTx.
+ * Standalone test/ops module; logic can later be invoked from robot enroll.
  *
- * Требуется кошелёк с тестовым PEAQ на Agung на газ (faucet: см. docs.peaq.xyz).
+ * Requires a wallet with test PEAQ on Agung for gas (faucet: see docs.peaq.xyz).
  *
  * Usage:
  *   npm run peaq:onboard
@@ -11,11 +11,11 @@
  *   node scripts/peaqOnboardMachine.js --dry-run
  *
  * Env:
- *   PEAQ_ONBOARD_EVM_PRIVATE_KEY — приватный ключ (0x… или hex без 0x) или mnemonic (не коммитить).
- *   PEAQ_ONBOARD_MACHINE_NAME — опционально; иначе генерируется raid_m_<random hex>.
- *   PEAQ_HTTP_BASE_URL, PEAQ_WSS_BASE_URL — опционально (дефолты Agung из src/config.js).
+ *   PEAQ_ONBOARD_EVM_PRIVATE_KEY — private key (0x… or hex without 0x) or mnemonic (never commit).
+ *   PEAQ_ONBOARD_MACHINE_NAME — optional; otherwise generated raid_m_<random hex>.
+ *   PEAQ_HTTP_BASE_URL, PEAQ_WSS_BASE_URL — optional (Agung defaults from src/config.js).
  *
- * После успеха скопируйте в .env RAID: PEAQ_MACHINE_DID_NAME, PEAQ_MACHINE_EVM_ADDRESS.
+ * On success copy into Raid .env: PEAQ_MACHINE_DID_NAME, PEAQ_MACHINE_EVM_ADDRESS.
  */
 
 const crypto = require('crypto');

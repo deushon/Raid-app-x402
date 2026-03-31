@@ -1,109 +1,109 @@
-# RAID App — полный цикл телеопа: `teleop/help`, SessionGrant, кошелёк оператора, пост-оплата SOL (x402)
+# RAID App — full teleop cycle: `teleop/help`, SessionGrant, operator wallet, post-session SOL payment (x402)
 
-**Аудитория:** команда RAID App (`x402_raid_app` или эквивалент), продукт и бэкенд.  
-**Робот:** пакет `rospy_x402` (`EscalationManager`, нода `x402_ex_server`).  
-**Разработчик робота (порядок шагов, KYR, `pending_from_raid`):** [ROBOT_TELEOP_KYR_RAID_GRANT.md](ROBOT_TELEOP_KYR_RAID_GRANT.md).  
-**Связанные документы:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (тело запроса), [RAID_INTEGRATION.md](RAID_INTEGRATION.md), [../br-kyr/DOC/ROSBRIDGE_AND_RAID.md](../../br-kyr/DOC/ROSBRIDGE_AND_RAID.md).
+**Audience:** RAID App team (`x402_raid_app` or equivalent), product and backend.  
+**Robot:** `rospy_x402` package (`EscalationManager`, `x402_ex_server` node).  
+**Robot developer (step order, KYR, `pending_from_raid`):** [ROBOT_TELEOP_KYR_RAID_GRANT.md](ROBOT_TELEOP_KYR_RAID_GRANT.md).  
+**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (request body), [RAID_INTEGRATION.md](RAID_INTEGRATION.md), [../br-kyr/DOC/ROSBRIDGE_AND_RAID.md](../../br-kyr/DOC/ROSBRIDGE_AND_RAID.md).
 
-## Цель
+## Goal
 
-Замкнуть цепочку:
+Close the loop:
 
-1. Робот запрашивает помощь **только** через RAID: `POST /api/robots/{robotId}/teleop/help` (уже реализовано).
-2. RAID назначает оператора, у которого в вашей БД уже есть **публичный ключ Solana** для приёма оплаты.
-3. RAID возвращает роботу **подписанный SessionGrant** (KYR), где в JSON указан `operator_pubkey` — тот же Solana base58.
-4. После сессии KYR закрывает сессию и кладёт тот же `operator_pubkey` в **SignedReceipt**.
-5. Робот переводит SOL оператору через **тот же кошелёк и стек**, что и сервис `x402_buy_service` (исходящий перевод `X402Client.send_payment`), сервис ROS `/x402/complete_teleop_payment`.
+1. Robot requests help **only** via RAID: `POST /api/robots/{robotId}/teleop/help` (already implemented).
+2. RAID assigns an operator who already has a **public Solana key** in your DB for payouts.
+3. RAID returns a **signed SessionGrant** (KYR) whose JSON includes `operator_pubkey` — same Solana base58.
+4. After the session KYR closes and puts the same `operator_pubkey` in **SignedReceipt**.
+5. Robot transfers SOL to the operator using the **same wallet stack** as `x402_buy_service` (outgoing `X402Client.send_payment`), ROS service `/x402/complete_teleop_payment`.
 
-RAID **не** обязан реализовывать on-chain логику Solana: достаточно отдавать корректный грант и pubkey; подпись транзакции выполняется на роботе.
-
----
-
-## 1. Запрос (без изменений базового контракта)
-
-См. [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md): `message`, `metadata.task_id`, `error_context`, `situation_report`, опционально `kyr_peaq_context`.
+RAID **does not** have to implement on-chain Solana logic: correct grant + pubkey is enough; the robot signs the transaction.
 
 ---
 
-## 2. Ответ RAID: идентификация заявки + подписанный грант
+## 1. Request (base contract unchanged)
 
-HTTP **200** или **201**; **401** при неверном секрете.
+See [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md): `message`, `metadata.task_id`, `error_context`, `situation_report`, optional `kyr_peaq_context`.
 
-### 2.1 Обязательные для полного цикла поля
+---
 
-Робот ищет грант в корне JSON или внутри `helpRequest` / `help_request` (вложенный объект сливается с корнем для поиска полей).
+## 2. RAID response: request id + signed grant
 
-**Вариант A (предпочтительный): готовая строка подписи**
+HTTP **200** or **201**; **401** on bad secret.
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `teleopGrantPayload` | string | Точная UTF-8 строка JSON **SessionGrant**, байт-в-байт как подписывали. Робот передаёт её в KYR без пересборки JSON. |
-| `teleopGrantSignature` | string | Подпись Ed25519 в **base58** над **сырыми UTF-8 байтами** `teleopGrantPayload`. |
+### 2.1 Fields required for the full cycle
 
-**Синонимы ключей (робот принимает любой из списка):**
+Robot looks for the grant at JSON root or inside `helpRequest` / `help_request` (nested object merged with root for field lookup).
+
+**Option A (preferred): ready signature string**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `teleopGrantPayload` | string | Exact UTF-8 JSON **SessionGrant** string, byte-for-byte as signed. Robot passes to KYR without re-serializing. |
+| `teleopGrantSignature` | string | Ed25519 signature **base58** over **raw UTF-8 bytes** of `teleopGrantPayload`. |
+
+**Key synonyms (robot accepts any):**
 
 - payload: `teleopGrantPayload`, `grantPayload`, `sessionGrantPayload`
 - signature: `teleopGrantSignature`, `grantSignature`, `sessionGrantSignature`
 
-**Вариант B: объект + подпись**
+**Option B: object + signature**
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `sessionGrant` (или `session_grant`) | object | Объект SessionGrant (см. §3). |
-| Один из ключей подписи выше | string | Подпись **именно** над каноническим JSON: `json.dumps(obj, sort_keys=True, separators=(',', ':'))`, UTF-8, `ensure_ascii=False` по смыслу Unicode. |
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionGrant` (or `session_grant`) | object | SessionGrant object (see §3). |
+| One of the signature keys above | string | Signature over **canonical** JSON: `json.dumps(obj, sort_keys=True, separators=(',', ':'))`, UTF-8, Unicode as `ensure_ascii=False`. |
 
-Вариант B хуже для совместимости: любое расхождение в сериализации сломает проверку на KYR. Вариант A надёжнее.
+Option B is worse for compatibility: any serialization mismatch breaks KYR verification. Option A is safer.
 
-### 2.2 Совместимость со старыми роботами
+### 2.2 Compatibility with legacy robots
 
-Если подписанного гранта нет, робот остаётся на **фолбэке**: локальный mock SessionGrant и `operator_pubkey: "pending_from_raid"` — оплата оператору будет пропущена до появления реального pubkey в receipt.
+If there is no signed grant, the robot stays on **fallback**: local mock SessionGrant and `operator_pubkey: "pending_from_raid"` — operator payment is skipped until a real pubkey appears in the receipt.
 
-### 2.3 Рекомендуемые дополнительные поля
+### 2.3 Recommended extra fields
 
-- `id` или `helpRequest.id` — как сейчас, для Peaq claim и трекинга.
-- `duplicate: true` при повторной доставке той же заявки — как сейчас.
+- `id` or `helpRequest.id` — as today, for Peaq claim and tracking.
+- `duplicate: true` when the same open request is posted again — as today.
 
-### 2.4 Когда оператор назначается при accept (реализация RAID App)
+### 2.4 When the operator is assigned (RAID App behavior)
 
-В текущем RAID оператор фиксируется только после **`POST /api/teleoperator/help-requests/{id}/accept`**. Поэтому **подписанный грант** не входит в ответ на первый **`POST …/teleop/help`**: робот после **`helpRequest.id`** опрашивает **`GET /api/robots/{robotId}/teleop/session-grant?helpRequestId=`** (тот же **`X-Robot-Teleop-Secret`**) до получения **`teleopGrantPayload`** / **`teleopGrantSignature`**, либо остаётся на фолбэке из §2.2, пока заявка открыта или ключ подписи не настроен.
+In current RAID the operator is fixed only after **`POST /api/teleoperator/help-requests/{id}/accept`**. So the **signed grant** is **not** in the first **`POST …/teleop/help`** response: the robot polls **`GET /api/robots/{robotId}/teleop/session-grant?helpRequestId=`** (same **`X-Robot-Teleop-Secret`**) until **`teleopGrantPayload`** / **`teleopGrantSignature`**, or stays on §2.2 fallback while the request is open or signing is unconfigured.
 
-В поле **`scope_json`** гранта RAID дополнительно кладёт подсказку для плоской оплаты: **`teleop_payment_mode`**: **`flat`**, **`teleop_operator_flat_sol`** (по умолчанию **0.0005**, env **`TELEOP_OPERATOR_FLAT_SOL`**) — чтобы нода могла согласовать сумму с **`/x402/complete_teleop_payment`** помимо per-second rosparam.
-
----
-
-## 3. Схема SessionGrant (JSON внутри `teleopGrantPayload`)
-
-Поля, которые ожидает KYR (`session_module.open_session`):
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `session_id` | string | Уникальный id сессии (можно UUID или id заявки help). |
-| `robot_id` | string | UUID робота из enroll (как у робота в `raid_robot_state.json`). |
-| `task_id` | string | Копия/связь с `metadata.task_id` из запроса. |
-| `operator_pubkey` | string | **Solana public key base58** оператора, которому потом уйдёт SOL. Должен совпадать с данными в вашей БД. |
-| `valid_until_sec` | number | Unix-время истечения гранта. |
-| `scope_json` | string | JSON-строка с политикой, напр. `{"allowed_actions":["*"]}`. |
-
-Подписывает грант **ключ RAID (Ed25519)**, не кошелёк оператора. Публичный ключ издателя гранта должен быть внесён в KYR в `~trusted_raid_keys` на роботе.
-
-**Важно:** `operator_pubkey` — это адрес получателя SOL; ключ подписи гранта — отдельный ключ доверия RAID.
+In **`scope_json`** RAID may add a flat payment hint: **`teleop_payment_mode`**: **`flat`**, **`teleop_operator_flat_sol`** (default **0.0005**, env **`TELEOP_OPERATOR_FLAT_SOL`**) so the node can align amount with **`/x402/complete_teleop_payment`** beyond per-second rosparam.
 
 ---
 
-## 4. Пост-оплата на роботе (для справки RAID / саппорта)
+## 3. SessionGrant schema (JSON inside `teleopGrantPayload`)
 
-После `POST …/teleop/help` и открытия сессии KYR оператор работает через существующий телеоп-пайплайн. При завершении сессии:
+Fields KYR expects (`session_module.open_session`):
 
-1. `teleop_fetch` вызывает KYR `close_session`.
-2. Затем вызывается ROS-сервис **`/x402/complete_teleop_payment`** с `receipt_payload` от KYR.
-3. Нода считает сумму: `(ended_at_sec - started_at_sec) * teleop_operator_payment_sol_per_sec` (rosparam, по умолчанию `1e-6` SOL/сек для тестов).
-4. Выполняется исходящий перевод SOL на `operator_pubkey` из receipt (тот же стек, что и `x402_buy_service` с заполненным `payer_account`).
+| Field | Type | Description |
+|-------|------|-------------|
+| `session_id` | string | Unique session id (UUID or help request id). |
+| `robot_id` | string | Robot UUID from enroll (as in robot `raid_robot_state.json`). |
+| `task_id` | string | Copy/link to `metadata.task_id` from the help request. |
+| `operator_pubkey` | string | **Solana public key base58** for the operator who receives SOL. Must match your DB. |
+| `valid_until_sec` | number | Grant expiry Unix time. |
+| `scope_json` | string | JSON string policy, e.g. `{"allowed_actions":["*"]}`. |
 
-Опционально RAID может позже принимать от робота уведомление о факте оплаты (отдельный эндпоинт — вне текущего обязательного контракта); в коде робота закомментирован пример `POST …/receipt`.
+The grant is signed by a **RAID key (Ed25519)**, not the operator wallet. KYR must list the issuer pubkey in `trusted_raid_keys` on the robot.
+
+**Important:** `operator_pubkey` is the SOL recipient; the grant signing key is a separate RAID trust key.
 
 ---
 
-## 5. Поток (кратко)
+## 4. Post-payment on the robot (for RAID / support context)
+
+After `POST …/teleop/help` and KYR session start, the operator uses the existing teleop pipeline. On session end:
+
+1. `teleop_fetch` calls KYR `close_session`.
+2. ROS service **`/x402/complete_teleop_payment`** is called with `receipt_payload` from KYR.
+3. Node computes amount: `(ended_at_sec - started_at_sec) * teleop_operator_payment_sol_per_sec` (rosparam, default `1e-6` SOL/s for tests).
+4. Outgoing SOL transfer to `operator_pubkey` from receipt (same stack as `x402_buy_service` with `payer_account`).
+
+RAID may later accept a payment notification from the robot (separate endpoint — outside current mandatory contract); robot code may have a commented example `POST …/receipt`.
+
+---
+
+## 5. Flow (short)
 
 ```mermaid
 sequenceDiagram
@@ -113,6 +113,9 @@ sequenceDiagram
     participant T as teleop_fetch
 
     R->>RAID: POST teleop/help + metadata
+    RAID-->>R: helpRequest id (poll session-grant after accept)
+    Note over RAID: operator accepts
+    R->>RAID: GET session-grant?helpRequestId=
     RAID-->>R: teleopGrantPayload + teleopGrantSignature
     R->>T: receive_grant(payload, sig)
     T->>KYR: open_session
@@ -127,35 +130,35 @@ sequenceDiagram
 
 ---
 
-## 6. Чеклист для RAID
+## 6. RAID checklist
 
-0. В окружении RAID задать **`TELEOP_GRANT_SIGNING_SECRET_KEY`** (отдельный Solana keypair для подписи гранта; не путать с кошельком плательщика на роботе). Иначе **`GET …/teleop/session-grant`** отвечает **`grant_unconfigured`**, робот остаётся на mock-гранте.
-1. Хранить и подставлять в грант **Solana base58** оператора из БД.
-2. Выдавать **подписанный** грант (вариант A или B).
-3. Опубликовать **Ed25519 публичный ключ подписанта** гранта для настройки KYR `trusted_raid_keys` (в проде смотреть **`GET /health`** → **`teleopGrantSignerPublicKey`**).
-4. Сохранять `situation_report` и контекст заявки в UI/API оператора ([RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md)).
+0. Set **`TELEOP_GRANT_SIGNING_SECRET_KEY`** in RAID (separate Solana keypair for grant signing; not the robot payer wallet). Else **`GET …/teleop/session-grant`** returns **`grant_unconfigured`** and the robot stays on mock grant.
+1. Store and inject operator **Solana base58** from DB into the grant.
+2. Issue a **signed** grant (option A or B).
+3. Publish the grant signer **Ed25519 public key** for KYR `trusted_raid_keys` (in prod use **`GET /health`** → **`teleopGrantSignerPublicKey`**).
+4. Persist `situation_report` and request context for the operator UI/API ([RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md)).
 
-После внедрения на стороне RAID робот перестаёт использовать mock-грант для этих ответов и сможет платить оператору в SOL по завершении сессии.
+After RAID implements this, the robot can stop using the mock grant for these flows and pay the operator in SOL when the session ends.
 
 ---
 
-## 7. Диагностика: `pending_from_raid` в receipt / «NO on-chain transfer»
+## 7. Troubleshooting: `pending_from_raid` in receipt / “NO on-chain transfer”
 
-Сообщение rospy вроде **`No valid operator Solana pubkey in receipt`** / **`pending_from_raid`** означает, что **KYR не зафиксировал в receipt реальный `operator_pubkey` из гранта RAID**. Это **не** значит, что RAID «шлёт устаревшие данные» в `POST …/teleop/help`: в этом ответе гранта ещё нет (оператор не назначен).
+Messages like **`No valid operator Solana pubkey in receipt`** / **`pending_from_raid`** mean **KYR did not record a real `operator_pubkey` from RAID’s signed grant** in **SignedReceipt**. It **does not** mean RAID sends stale data in `POST …/teleop/help`: that response has no grant yet (no operator).
 
-**Типичные причины:**
+**Typical causes:**
 
-1. **Порядок шагов на роботе:** сессия KYR открыта с **mock-грантом** до того, как робот выполнил **`GET …/teleop/session-grant`** после **accept** оператором. Нужно: после accept (или поллингом) получить **`teleopGrantPayload`** + **`teleopGrantSignature`**, передать их в KYR **`open_session`**, и только потом вести телеоп.
-2. **Подпись гранта не доверена на KYR:** публичный ключ подписанта RAID должен быть в **`trusted_raid_keys`** на роботе. Сверка: **`GET /health`** на RAID → **`teleopGrantSignerPublicKey`**, либо поле **`grantSignerPublicKey`** в ответе **`GET …/teleop/session-grant`** (то же значение). Без этого KYR может отклонить грант и остаться на фолбэке.
-3. **`grant_absent` на RAID:** у оператора в БД пустой **`wallet_public_key`** — грант не подписывается.
+1. **Step order on robot:** KYR `open_session` ran with a **mock grant** before the robot finished **`GET …/teleop/session-grant`** after operator **accept**. Fix: after accept (or polling) obtain **`teleopGrantPayload`** + **`teleopGrantSignature`**, pass them to KYR **`open_session`**, then teleop.
+2. **Grant signature not trusted on KYR:** RAID signer pubkey must be in **`trusted_raid_keys`** on the robot. Compare **`GET /health`** on RAID → **`teleopGrantSignerPublicKey`**, or **`grantSignerPublicKey`** in **`GET …/teleop/session-grant`**. Without this KYR may reject the grant and stay on fallback.
+3. **`grant_absent` on RAID:** operator has empty **`wallet_public_key`** in DB — grant is not signed.
 
-**Проверка с хоста (подставьте `robotId`, секрет, `helpRequestId` после accept):**
+**Check from a workstation (substitute `robotId`, secret, `helpRequestId` after accept):**
 
 ```bash
 curl -sS -H "X-Robot-Teleop-Secret: <secret>" \
   "https://<raid-host>/api/robots/<robotId>/teleop/session-grant?helpRequestId=<uuid>"
 ```
 
-В теле **`teleopGrantPayload`** (JSON-строка) после парсинга должно быть поле **`operator_pubkey`** с base58 кошелька оператора (не `pending_from_raid`).
+Parsed **`teleopGrantPayload`** must contain **`operator_pubkey`** as operator base58 wallet (not `pending_from_raid`).
 
-Ответ **`POST …/teleop/help`** при настроенном подписании гранта содержит **`teleopGrantPollUrl`** — готовый относительный путь для поллинга после accept.
+When grant signing is configured, **`POST …/teleop/help`** may include **`teleopGrantPollUrl`** — relative path ready for polling after accept.

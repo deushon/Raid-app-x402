@@ -37,17 +37,17 @@ async function apiJson(path, options = {}) {
 
 function renderHelpList(container, items) {
   if (!items.length) {
-    container.innerHTML = '<p class="hint">Нет открытых заявок.</p>';
+    container.innerHTML = '<p class="hint">No open help requests.</p>';
     return;
   }
   container.innerHTML = items
     .map(
       (h) => `
     <article class="help-card" data-id="${h.id}">
-      <div><strong>Робот</strong> <code>${h.robotId}</code></div>
-      <div><strong>Создана</strong> ${new Date(h.createdAt).toLocaleString()}</div>
+      <div><strong>Robot</strong> <code>${h.robotId}</code></div>
+      <div><strong>Created</strong> ${new Date(h.createdAt).toLocaleString()}</div>
       ${h.payload?.message ? `<div>${escapeHtml(String(h.payload.message))}</div>` : ''}
-      <button type="button" class="btn-accept" data-id="${h.id}">Принять</button>
+      <button type="button" class="btn-accept" data-id="${h.id}">Accept</button>
     </article>`,
     )
     .join('');
@@ -83,7 +83,7 @@ async function loadHelpRequests() {
     }
   } catch (e) {
     if (helpErrorEl) {
-      helpErrorEl.textContent = e.message || 'Не удалось загрузить заявки';
+      helpErrorEl.textContent = e.message || 'Failed to load help requests';
       helpErrorEl.classList.remove('hidden');
     }
   }
@@ -104,11 +104,11 @@ async function acceptHelp(id) {
       : '';
     if (sessionBoxEl) {
       sessionBoxEl.innerHTML = `
-        <p><strong>sessionId</strong> (для VR / ROSBridge-прокси):</p>
+        <p><strong>sessionId</strong> (for VR / ROSBridge proxy):</p>
         <p><code id="copy-session-id">${sessionId || ''}</code></p>
-        <p><strong>WebSocket URL</strong> (замените прямой ws://робот:9090):</p>
+        <p><strong>WebSocket URL</strong> (use instead of direct ws://robot:9090):</p>
         <p class="ws-url"><code id="copy-ws-url">${escapeHtml(wsProxy)}</code></p>
-        <button type="button" id="copy-ws-btn" class="btn-secondary">Копировать WS URL</button>
+        <button type="button" id="copy-ws-btn" class="btn-secondary">Copy WebSocket URL</button>
       `;
       const copyBtn = document.getElementById('copy-ws-btn');
       const wsUrlText = document.getElementById('copy-ws-url');
@@ -116,20 +116,20 @@ async function acceptHelp(id) {
         copyBtn.addEventListener('click', async () => {
           try {
             await navigator.clipboard.writeText(wsProxy);
-            copyBtn.textContent = 'Скопировано';
+            copyBtn.textContent = 'Copied';
           } catch {
-            copyBtn.textContent = 'Не удалось скопировать';
+            copyBtn.textContent = 'Copy failed';
           }
         });
       }
     }
     if (sessionHintEl) {
-      sessionHintEl.textContent = 'Подключите VR-клиент к URL выше; протокол тот же, что у ROSBridge.';
+      sessionHintEl.textContent = 'Point your VR client at the URL above; the protocol matches ROSBridge.';
     }
     await loadHelpRequests();
   } catch (e) {
     if (helpErrorEl) {
-      helpErrorEl.textContent = e.message || 'Не удалось принять заявку';
+      helpErrorEl.textContent = e.message || 'Failed to accept help request';
       helpErrorEl.classList.remove('hidden');
     }
   }
@@ -139,7 +139,7 @@ function connectEventsSocket() {
   const token = getAccessToken();
   if (!token) {
     if (sessionHintEl) {
-      sessionHintEl.textContent = 'Войдите снова, чтобы получить токен для WebSocket.';
+      sessionHintEl.textContent = 'Sign in again to obtain a WebSocket token.';
     }
     return;
   }

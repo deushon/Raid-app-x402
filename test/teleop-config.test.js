@@ -21,8 +21,8 @@ describe('teleop config env', () => {
       backup[k] = process.env[k];
       delete process.env[k];
     });
-    // loadConfig() вызывает loadEnvFile: удалённые ключи снова подмешиваются из .env в cwd.
-    // Пустая строка не перезаписывается из файла и даёт grantSigningSecretKey: null в config.
+    // loadConfig() calls loadEnvFile: deleted keys may be re-applied from .env in cwd.
+    // Empty string is not overwritten from file and yields grantSigningSecretKey: null in config.
     process.env.TELEOP_GRANT_SIGNING_SECRET_KEY = '';
   });
 
@@ -116,7 +116,7 @@ describe('peaq config env', () => {
   });
 
   test('peaq HTTP/WSS null when PEAQ_ENABLED false and unset', () => {
-    // Явно выключаем: в cwd может быть .env с PEAQ_ENABLED=true (loadEnvFile подмешивает в process.env).
+    // Explicitly off: cwd may have .env with PEAQ_ENABLED=true (loadEnvFile merges into process.env).
     process.env.PEAQ_ENABLED = 'false';
     const c = loadConfig([]);
     assert.equal(c.peaq.enabled, false);

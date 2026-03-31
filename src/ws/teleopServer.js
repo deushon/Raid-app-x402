@@ -9,8 +9,8 @@ const {
 } = require('../services/teleopHelpRepository');
 
 /**
- * URL и опции клиента ws к rosbridge на роботе: идентификатор телеоператора (JWT sub + login).
- * Робот может прочитать заголовки на стороне прокси/nginx или query (если стек их отдаёт в приложение).
+ * Client WS URL/options toward rosbridge on the robot: teleoperator identity (JWT sub + login).
+ * The robot may read headers on proxy/nginx or query params (if the stack exposes them to the app).
  *
  * @param {{ rosHost: string, rosPort: number, user: { id: string, login?: string }, teleopCfg: { forwardOperatorHeaders?: boolean, forwardOperatorQuery?: boolean } }} p
  * @returns {{ url: string, wsOptions: { headers: Record<string, string> } | null }}
@@ -44,7 +44,7 @@ function buildRosbridgeWebSocketTarget({ rosHost, rosPort, user, teleopCfg }) {
 }
 
 /**
- * Одна попытка открыть исходящий WS к rosbridge (до события open или таймаута / error).
+ * Single attempt to open outbound WS to rosbridge (until open, timeout, or error).
  * @param {string} rosUrl
  * @param {import('ws').ClientOptions | null} wsOptions
  * @param {number} connectTimeoutMs
@@ -88,7 +88,7 @@ function openRosbridgeOnce(rosUrl, wsOptions, connectTimeoutMs) {
 }
 
 /**
- * Несколько попыток подключения к rosbridge с паузой между ними.
+ * Multiple rosbridge connect attempts with delay between tries.
  */
 async function openRosbridgeWithRetries(rosUrl, wsOptions, connectTimeoutMs, attempts, delayMs) {
   let lastErr = new Error('Rosbridge connect failed');
@@ -340,7 +340,7 @@ function handleProxySession(ws, ctx) {
     rosUrl = built.url;
     wsOptions = built.wsOptions;
 
-    /** Сколько циклов переподключения к rosbridge осталось после обрыва (после успешного open сбрасывается в dropWaves). */
+    /** Remaining rosbridge reconnect waves after a drop (reset to dropWaves after a successful open). */
     let reconnectAttemptsLeft = 0;
 
     const onRobotSideDead = () => {

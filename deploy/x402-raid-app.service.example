@@ -1,11 +1,11 @@
-# Пример systemd-юнита для фонового запуска без Docker.
+# Example systemd unit for running in the background without Docker.
 # 1. sudo cp deploy/x402-raid-app.service.example /etc/systemd/system/x402-raid-app.service
-# 2. Отредактируйте WorkingDirectory, User, ExecStart (путь к node: which node), при необходимости EnvironmentFile.
+# 2. Edit WorkingDirectory, User, ExecStart (path to node: which node), EnvironmentFile if needed.
 # 3. sudo systemctl daemon-reload && sudo systemctl enable --now x402-raid-app
 # 4. sudo systemctl status x402-raid-app
 #
-# mDNS (MDNS_ENABLED=true): нужен multicast UDP 5353; при проблемах проверьте firewall.
-# В Docker для mDNS обычно требуется network_mode: host для сервиса приложения.
+# mDNS (MDNS_ENABLED=true): needs multicast UDP 5353; check firewall if it fails.
+# Docker usually needs network_mode: host on the app service for mDNS.
 
 [Unit]
 Description=x402 Raid App (Node.js)
@@ -17,7 +17,7 @@ Type=simple
 # User=deploy
 WorkingDirectory=/opt/x402_raid_app
 EnvironmentFile=/opt/x402_raid_app/.env
-# Укажите полный путь к node (nvm: ~/.nvm/versions/node/v22.x.x/bin/node)
+# Use full path to node (nvm: ~/.nvm/versions/node/v22.x.x/bin/node)
 ExecStart=/usr/bin/node /opt/x402_raid_app/src/index.js
 Restart=always
 RestartSec=5

@@ -1,70 +1,70 @@
-# Интеграция робота с `raid_app` (роль `teleop_fetch`)
+# Robot integration with `raid_app` (`teleop_fetch` role)
 
-Документ описывает **HTTP-вызов с робота** к Raid App (условное имя **`teleop_fetch`**: скрипт, ROS-нода, systemd и т.д.) и **что робот видит**, когда телеоператор уже принял заявку и идёт прокси к ROSBridge.
+This document describes the **HTTP call from the robot** to Raid App (informal name **`teleop_fetch`**: script, ROS node, systemd, etc.) and **what the robot sees** after an operator accepts and the ROSBridge proxy is active.
 
-См. также: [README.md](../README.md) (таблица `TELEOP_*`, Docker, health), [ROBOT_SIDE_AI_AGENT.md](./ROBOT_SIDE_AI_AGENT.md) (чеклист для кода на роботе), исходный код [`src/routes/teleopHelp.js`](../src/routes/teleopHelp.js), [`src/ws/teleopServer.js`](../src/ws/teleopServer.js).
-
----
-
-## Что делает `teleop_fetch`
-
-Обычно **одно действие**: сообщить `raid_app`, что робот просит помощь — это **`POST /api/robots/{robotId}/teleop/help`**.
-
-Для этого вызова **не нужны** JWT телеоператора, cookie и WebSocket: ими пользуются оператор и VR **после** принятия заявки.
+See also: [README.md](../README.md) (`TELEOP_*` table, Docker, health), [ROBOT_SIDE_AI_AGENT.md](./ROBOT_SIDE_AI_AGENT.md) (checklist for robot-side code), source [`src/routes/teleopHelp.js`](../src/routes/teleopHelp.js), [`src/ws/teleopServer.js`](../src/ws/teleopServer.js).
 
 ---
 
-## Условия на стороне `raid_app`
+## What `teleop_fetch` does
 
-Без них маршрут помощи **не смонтирован** (запрос к `/api/robots/.../teleop/help` не обработается как телеоп):
+Usually **one action**: tell `raid_app` the robot needs help — **`POST /api/robots/{robotId}/teleop/help`**.
 
-1. Заданы **`DATABASE_URL`** и **`TELEOPERATOR_JWT_SECRET`** — создаются таблицы, подключаются `/api/teleoperator/*`, **`/api/robots/.../teleop/help`**, UI `/teleoperator`.
-2. Робот **зарегистрирован** в реестре: админка **`/ui`** (**`/api/admin/robots`**), либо **`POST /api/robots/enroll`** с **`ROBOT_FLEET_ENROLLMENT_SECRET`** (заголовок **`X-Robot-Fleet-Secret`** или **`Authorization: Bearer`**), либо **`POST /api/robots`** с тем же секретом или админ-сессией.
-3. В карточке робота задан **`teleopSecret`** (ответ enroll/админского API; **публичный** **`GET /api/robots`** секрет **не** отдаёт).
+This call **does not** need teleoperator JWT, cookies, or WebSocket; the operator and VR use those **after** accept.
 
-Проверка: **`GET /health`** — **`teleoperatorEnabled: true`**, если БД подключена; **`teleopWs: true`**, если ещё включён WebSocket-телеоп (`TELEOP_WS_ENABLED` не `false`/`0`).
+---
 
-### Регистрация в реестре (`POST /api/robots/enroll`)
+## Requirements on `raid_app`
 
-Рекомендуемый путь для робота: один раз (и при смене IP/host) вызвать **`POST /api/robots/enroll`** с тем же **`enrollmentKey`** (стабильный id устройства в вашем конфиге).
+Without these the help route is **not mounted** (requests to `/api/robots/.../teleop/help` are not handled as teleop):
 
-| Параметр | Значение |
-| --- | --- |
+1. **`DATABASE_URL`** and **`TELEOPERATOR_JWT_SECRET`** are set — tables exist, `/api/teleoperator/*`, **`/api/robots/.../teleop/help`**, UI `/teleoperator` are wired.
+2. The robot is **registered** in the registry: admin **`/ui`** (**`/api/admin/robots`**), or **`POST /api/robots/enroll`** with **`ROBOT_FLEET_ENROLLMENT_SECRET`** (header **`X-Robot-Fleet-Secret`** or **`Authorization: Bearer`**), or **`POST /api/robots`** with the same secret or admin session.
+3. The robot row has **`teleopSecret`** (from enroll/admin API; public **`GET /api/robots`** does **not** return it).
+
+Check: **`GET /health`** — **`teleoperatorEnabled: true`** when DB is connected; **`teleopWs: true`** when teleop WebSocket is enabled (`TELEOP_WS_ENABLED` not `false`/`0`).
+
+### Registry registration (`POST /api/robots/enroll`)
+
+Recommended path: call **`POST /api/robots/enroll`** once (and when IP/host changes) with the same **`enrollmentKey`** (stable device id in your config).
+
+| Parameter | Value |
+|-----------|-------|
 | **URL** | `http(s)://<RAID_HOST>:<PORT>/api/robots/enroll` |
-| **Авторизация флота** | **`X-Robot-Fleet-Secret: <ROBOT_FLEET_ENROLLMENT_SECRET>`** или **`Authorization: Bearer <тот же секрет>`** |
-| **Тело (JSON)** | Обязательно **`enrollmentKey`**, **`host`**, **`port`**; опционально **`name`**, **`rosbridgeHost`**, **`rosbridgePort`**, **`teleopSecret`** (если не задать — сервер сгенерирует), **`operatorRegistryUrl`** (для push allowlist, см. [ROBOT_OPERATOR_SYNC.md](./ROBOT_OPERATOR_SYNC.md)) |
+| **Fleet auth** | **`X-Robot-Fleet-Secret: <ROBOT_FLEET_ENROLLMENT_SECRET>`** or **`Authorization: Bearer <same secret>`** |
+| **Body (JSON)** | Required **`enrollmentKey`**, **`host`**, **`port`**; optional **`name`**, **`rosbridgeHost`**, **`rosbridgePort`**, **`teleopSecret`** (server generates if omitted), **`operatorRegistryUrl`** (allowlist push, see [ROBOT_OPERATOR_SYNC.md](./ROBOT_OPERATOR_SYNC.md)) |
 
-В ответе — полный объект робота, включая **`id`** (сохраните как **`robotId`**) и **`teleopSecret`**. Повторный вызов с тем же **`enrollmentKey`** обновляет строку (тот же **`id`**).
+Response: full robot object including **`id`** (store as **`robotId`**) and **`teleopSecret`**. Repeat with the same **`enrollmentKey`** updates the row (same **`id`**).
 
-Обнаружение **`RAID_HOST`**: можно задать в конфиге **`http://raid-app.local:3000`** при включённом mDNS на сервере (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, см. README).
+**Discovering `RAID_HOST`:** e.g. **`http://raid-app.local:3000`** when mDNS is enabled on the server (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, see README).
 
 ---
 
-## Контракт HTTP для `teleop_fetch`
+## HTTP contract for `teleop_fetch`
 
-| Параметр | Значение |
-| --- | --- |
-| **Метод** | `POST` |
+| Parameter | Value |
+|-----------|-------|
+| **Method** | `POST` |
 | **URL** | `http(s)://<HOST>:<PORT>/api/robots/<robotId>/teleop/help` |
-| **`robotId`** | UUID из ответа **`POST /api/robots/enroll`** или админского **`POST /api/admin/robots`** (не `host:port` робота). |
-| **Секрет робота** | Заголовок **`X-Robot-Teleop-Secret: <секрет>`** — тот же, что в реестре. **Или** **`Authorization: Bearer <секрет>`** (то же значение). |
-| **Тело** | JSON: обязательно строковое **`message`**. Объект **`metadata`** рекомендуется: строки **`task_id`**, **`error_context`** (может быть пустой), опционально **`situation_report`** — свободный UTF-8 текст о состоянии робота (до ~64 KiB по байтам UTF-8, длиннее сервер обрезает). Если **`metadata`** нет, сервер подставит пустые строки для этих полей. Дополнительные поля в **`metadata`** сохраняются. |
-| **Content-Type** | При теле: `application/json`. |
+| **`robotId`** | UUID from **`POST /api/robots/enroll`** or admin **`POST /api/admin/robots`** (not the robot’s `host:port`). |
+| **Robot secret** | Header **`X-Robot-Teleop-Secret: <secret>`** — same as in registry. **Or** **`Authorization: Bearer <secret>`** (same value). |
+| **Body** | JSON: required string **`message`**. **`metadata`** recommended: strings **`task_id`**, **`error_context`** (may be empty), optional **`situation_report`** — free UTF-8 state text (up to ~64 KiB UTF-8 bytes, server truncates longer). If **`metadata`** is missing, the server fills those fields with empty strings. Extra keys under **`metadata`** are preserved. |
+| **Content-Type** | With body: `application/json`. |
 
-### Ответы
+### Responses
 
-| Код | Смысл |
-| --- | --- |
-| **201** | Новая заявка; в теле `helpRequest`, **`duplicate: false`**. |
-| **200** | Уже есть открытая заявка для этого робота; тот же формат, **`duplicate: true`**. |
-| **401** | Нет/неверный секрет или у робота не задан `teleopSecret`. |
-| **404** | Нет такого `robotId` в реестре. |
-| **400** | Нет или не строка **`message`**. |
-| **500** | Ошибка сервера/БД. |
+| Code | Meaning |
+|------|---------|
+| **201** | New request; body has `helpRequest`, **`duplicate: false`**. |
+| **200** | Open request already exists; same shape, **`duplicate: true`**. |
+| **401** | Missing/wrong secret or robot has no `teleopSecret`. |
+| **404** | No such `robotId` in registry. |
+| **400** | Missing or non-string **`message`**. |
+| **500** | Server/DB error. |
 
-После **201/200** событие **`help_request`** уходит по **`/ws/teleoperator?token=…`**: если у робота есть активные строки в **`teleoperator_robot_grants`**, только этим операторам; иначе — всем подключённым с валидным JWT. На роботе дополнительно ничего открывать для этого не нужно.
+After **201/200** a **`help_request`** event is sent on **`/ws/teleoperator?token=…`**: if the robot has active **`teleoperator_robot_grants`** rows, only those operators; otherwise all connected clients with valid JWT. The robot does not need to open anything extra for this.
 
-### Пример (`curl`)
+### Example (`curl`)
 
 ```bash
 curl -sS -X POST \
@@ -74,62 +74,62 @@ curl -sS -X POST \
   -d '{"message":"Need assistance","metadata":{"task_id":"run-1","error_context":"","situation_report":"Near door; navigation stalled.","battery":12}}'
 ```
 
-### Требования к `teleopSecret`
+### `teleopSecret` requirements
 
-В коде **нет** минимальной длины или ограничения по символам: пустая строка означает «телеоп выключен» для робота. Для продакшена используйте **длинный случайный** секрет, как для API-ключа.
+There is **no** minimum length in code: empty string means “teleop disabled” for that robot. In production use a **long random** secret like an API key.
 
 ---
 
-## Идентификатор оператора на роботе (исходящий WS `raid_app` → rosbridge)
+## Operator identity on the robot (outbound WS `raid_app` → rosbridge)
 
-Это **не** часть `teleop_fetch`: срабатывает **после** того, как оператор вызвал **`POST /api/teleoperator/help-requests/{id}/accept`** и подключился к **`/ws/teleop/session/{sessionId}?token=…`**.
+This is **not** part of `teleop_fetch`: it applies **after** the operator calls **`POST /api/teleoperator/help-requests/{id}/accept`** and connects to **`/ws/teleop/session/{sessionId}?token=…`**.
 
-Тогда **сервер Raid App** открывает **свой** клиентский WebSocket к **`ws://rosbridgeHost:rosbridgePort`** (поля из карточки робота; по умолчанию `rosbridgeHost = host`, порт **9090**).
+Then **Raid App** opens its **own** client WebSocket to **`ws://rosbridgeHost:rosbridgePort`** (robot card fields; default `rosbridgeHost = host`, port **9090**).
 
-**JWT на робот не передаётся.** Передаются только **стабильные поля профиля**:
+**The JWT is not sent to the robot.** Only **stable profile fields**:
 
-| Канал | Имя | Значение |
-| --- | --- | --- |
-| HTTP-заголовок | **`X-Teleoperator-Id`** | UUID пользователя телеоператора в PostgreSQL (= **`sub`** в JWT). |
-| HTTP-заголовок | **`X-Teleoperator-Login`** | Логин из JWT, **только если** он есть при выдаче токена. |
-| Query в URL | **`teleoperator_id`** | То же, что `X-Teleoperator-Id`. |
-| Query в URL | **`teleoperator_login`** | То же, что логин; **параметр опускается**, если логина нет. |
+| Channel | Name | Value |
+|---------|------|-------|
+| HTTP header | **`X-Teleoperator-Id`** | Teleoperator user UUID in PostgreSQL (= JWT **`sub`**). |
+| HTTP header | **`X-Teleoperator-Login`** | Login from JWT **only if** present when the token was issued. |
+| Query | **`teleoperator_id`** | Same as `X-Teleoperator-Id`. |
+| Query | **`teleoperator_login`** | Same as login; **omitted** if no login. |
 
-Пример URL (без учёта путей rosbridge; фактически часто `ws://IP:9090?teleoperator_id=…&teleoperator_login=…`):
+Example URL (paths to rosbridge aside; often `ws://IP:9090?teleoperator_id=…&teleoperator_login=…`):
 
 ```text
 ws://192.168.1.10:9090?teleoperator_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890&teleoperator_login=operator1
 ```
 
-**Стандартный rosbridge** эти заголовки и query **может игнорировать**. Их обычно читают **nginx / другой прокси** перед rosbridge или собственная обёртка.
+**Stock rosbridge** may **ignore** these headers and query. They are usually read by **nginx / another proxy** in front of rosbridge or a custom wrapper.
 
-### Отключение проброса (только на стороне `raid_app`)
+### Disabling forwarding (Raid side only)
 
-| Переменная | По умолчанию | Если `false` / `0` / `no` / `off` |
-| --- | --- | --- |
-| **`TELEOP_FORWARD_OPERATOR_HEADERS`** | включено | Не слать **`X-Teleoperator-*`**. |
-| **`TELEOP_FORWARD_OPERATOR_QUERY`** | включено | Не добавлять **`teleoperator_*`** в URL. |
+| Variable | Default | If `false` / `0` / `no` / `off` |
+|----------|---------|--------------------------------|
+| **`TELEOP_FORWARD_OPERATOR_HEADERS`** | on | Do not send **`X-Teleoperator-*`**. |
+| **`TELEOP_FORWARD_OPERATOR_QUERY`** | on | Do not append **`teleoperator_*`** to the URL. |
 
-Пустые значения env оставляют **поведение по умолчанию** (включено). Реализация: **`buildRosbridgeWebSocketTarget`** в [`src/ws/teleopServer.js`](../src/ws/teleopServer.js), флаги в [`src/config.js`](../src/config.js) (`forwardOperatorHeaders` / `forwardOperatorQuery`).
+Empty env values keep **defaults** (enabled). Implementation: **`buildRosbridgeWebSocketTarget`** in [`src/ws/teleopServer.js`](../src/ws/teleopServer.js), flags in [`src/config.js`](../src/config.js) (`forwardOperatorHeaders` / `forwardOperatorQuery`).
 
-**Переподключения и «жизнь» сессии WS** (тот же файл `teleopServer.js` + env в README): **`TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS`**, **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**, **`TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS`**, **`TELEOP_SESSION_END_GRACE_MS`**. JWT оператора по-прежнему **`TELEOPERATOR_JWT_EXPIRES_IN`**.
-
----
-
-## Сеть и безопасность
-
-- Робот и `raid_app` должны видеть друг друга по сети (часто **LAN** и для HTTP `teleop/help`, и для исходящего WS к rosbridge).
-- Секрет `teleopSecret` не логируйте целиком.
-- CORS разрешает **`X-Robot-Teleop-Secret`** и **`X-Robot-Fleet-Secret`** для браузера; типичный `teleop_fetch` на роботе — **сервер-сервер**, CORS не используется.
+**Reconnects and WS session lifetime** (same `teleopServer.js` + README env): **`TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS`**, **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**, **`TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS`**, **`TELEOP_SESSION_END_GRACE_MS`**. Operator JWT still **`TELEOPERATOR_JWT_EXPIRES_IN`**.
 
 ---
 
-## Нужно ли менять код `teleop_fetch`
+## Network and security
 
-Меняйте **только если** не соблюдён контракт **POST …/teleop/help** (URL, метод, заголовок секрета, UUID робота). Проброс **`teleoperator_*`** на робот настраивается **в Raid App** и в **прокси/rosbridge-стеке** на роботе; самому `teleop_fetch` из-за этого обычно **ничего не добавлять**.
+- Robot and `raid_app` must reach each other (often **LAN** for HTTP `teleop/help` and outbound WS to rosbridge).
+- Do not log full `teleopSecret`.
+- CORS allows **`X-Robot-Teleop-Secret`** and **`X-Robot-Fleet-Secret`** for browsers; typical `teleop_fetch` on the robot is **server-to-server**, no CORS.
+
+---
+
+## Do you need to change `teleop_fetch` code
+
+Change **only if** the **POST …/teleop/help** contract is wrong (URL, method, secret header, robot UUID). Forwarding **`teleoperator_*`** is configured on **Raid App** and on the robot **proxy/rosbridge stack**; `teleop_fetch` usually needs **no** extra logic for that.
 
 ---
 
 ## OpenAPI
 
-Тег **Teleop**, путь **`POST /api/robots/{robotId}/teleop/help`** — интерактивно в **`/docs`**.
+**Teleop** tag, **`POST /api/robots/{robotId}/teleop/help`** — interactive at **`/docs`**.

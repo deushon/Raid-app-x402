@@ -35,14 +35,14 @@ function initTeleopLogin() {
         body: JSON.stringify(body),
       });
     } catch {
-      errorEl.textContent = 'Нет сети или сервер недоступен';
+      errorEl.textContent = 'Network error or server unreachable';
       errorEl.classList.remove('hidden');
       return;
     }
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      errorEl.textContent = data.error || 'Неверный логин или пароль';
+      errorEl.textContent = data.error || 'Invalid login or password';
       errorEl.classList.remove('hidden');
       return;
     }

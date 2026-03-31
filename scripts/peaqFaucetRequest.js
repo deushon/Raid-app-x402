@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * Запрос тестовых AGNG через официальный API крана Peaq (тот же, что виджет на docs.peaq.xyz).
- * В браузере запрос часто ломается: Cloudflare 524 (таймаут origin) → ответ без CORS → «Failed to fetch» / CORS.
- * Из Node.js CORS не применяется; остаётся только доступность и скорость бэкенда Peaq.
+ * Request test AGNG via Peaq’s official faucet API (same as the docs.peaq.xyz widget).
+ * In the browser the call often fails: Cloudflare 524 (origin timeout) → response without CORS → "Failed to fetch" / CORS.
+ * Node.js is not subject to CORS; only Peaq backend availability and latency matter.
  *
  * Usage:
  *   npm run peaq:faucet -- 0xYourEvmAddress
  *   PEAQ_FAUCET_ADDRESS=0x... npm run peaq:faucet
  *
- * Env (опционально):
- *   PEAQ_FAUCET_APIKEY — ключ из исходника страницы docs (поле APIKEY в скрипте виджета), если Peaq сменит встроенный.
- *   PEAQ_FAUCET_URL — URL POST (по умолчанию dev-peaq-faucet-service.cisys.xyz/get-test-tokens).
- *   PEAQ_FAUCET_TIMEOUT_MS — таймаут запроса мс (по умолчанию 180000).
+ * Optional env:
+ *   PEAQ_FAUCET_APIKEY — key from docs page source (APIKEY in widget script) if Peaq changes the embedded one.
+ *   PEAQ_FAUCET_URL — POST URL (default dev-peaq-faucet-service.cisys.xyz/get-test-tokens).
+ *   PEAQ_FAUCET_TIMEOUT_MS — request timeout in ms (default 180000).
  */
 
 const { ethers } = require('ethers');
 
-/** Публичный ключ из встроенного виджета на docs.peaq.xyz (как у любого client-side запроса). */
+/** Public key from the embedded widget on docs.peaq.xyz (same as any client-side call). */
 const DEFAULT_FAUCET_URL = 'https://dev-peaq-faucet-service.cisys.xyz/get-test-tokens';
 const DEFAULT_API_KEY = '78b996ecb21a4a676078b99667606a6ae72d';
 

@@ -32,14 +32,14 @@ function initTeleopRegister() {
         body: JSON.stringify(body),
       });
     } catch {
-      errorEl.textContent = 'Нет сети или сервер недоступен';
+      errorEl.textContent = 'Network error or server unreachable';
       errorEl.classList.remove('hidden');
       return;
     }
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      errorEl.textContent = data.error || 'Ошибка регистрации';
+      errorEl.textContent = data.error || 'Registration failed';
       errorEl.classList.remove('hidden');
       return;
     }

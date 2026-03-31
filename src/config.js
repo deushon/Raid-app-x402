@@ -228,29 +228,29 @@ const loadConfig = (argv = []) => {
       jwtExpiresIn: process.env.TELEOPERATOR_JWT_EXPIRES_IN || '7d',
       cookieName: 'teleop_token',
       bcryptRounds: toNumber(process.env.TELEOPERATOR_BCRYPT_ROUNDS, 10),
-      /** 'auto' | 'always' | 'never' — флаг Secure на cookie (HTTP без TLS ломал логин при always+production) */
+      /** 'auto' | 'always' | 'never' — Secure flag on cookie (plain HTTP broke login with always+production) */
       cookieSecureMode: teleoperatorCookieSecureMode,
     },
     teleop: {
       enabled: process.env.TELEOP_WS_ENABLED !== '0' && process.env.TELEOP_WS_ENABLED !== 'false',
       maxMessageBytes: toNumber(process.env.TELEOP_MAX_MESSAGE_BYTES, 16 * 1024 * 1024),
       rosbridgeConnectTimeoutMs: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS, 10000),
-      /** Попыток открыть исходящий WS к rosbridge (каждая попытка с таймаутом rosbridgeConnectTimeoutMs). */
+      /** Attempts to open outbound WS to rosbridge (each attempt uses rosbridgeConnectTimeoutMs). */
       rosbridgeConnectAttempts: toNumber(process.env.TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS, 3),
-      /** Пауза между попытками (мс). */
+      /** Delay between attempts (ms). */
       rosbridgeReconnectDelayMs: toNumber(process.env.TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS, 2000),
       /**
-       * После обрыва уже открытого rosbridge — сколько раз сервер снова пройдёт цикл подключений
-       * (по rosbridgeConnectAttempts попыток с паузой) пока клиентский WS к Raid ещё открыт.
+       * After a rosbridge connection drops — how many times the server repeats the connect cycle
+       * (rosbridgeConnectAttempts attempts with delay) while the client WS to Raid stays open.
        */
       rosbridgeDropReconnectAttempts: toNumber(process.env.TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS, 3),
       /**
-       * После отключения оператора от /ws/teleop/session/... или после окончательного падения rosbridge:
-       * через столько мс закрыть сессию в БД (можно снова подключиться с тем же sessionId и JWT).
-       * 0 — закрывать сессию в БД сразу (старое поведение).
+       * After operator disconnect from /ws/teleop/session/... or final rosbridge failure:
+       * wait this many ms before closing the DB session row (same sessionId + JWT may reconnect until then).
+       * 0 — close the DB session immediately (legacy behavior).
        */
       sessionEndGraceMs: toNumber(process.env.TELEOP_SESSION_END_GRACE_MS, 120000),
-      /** Исходящий WS к rosbridge: передать id/login телеоператора (заголовки и/или query). */
+      /** Outbound WS to rosbridge: forward teleoperator id/login (headers and/or query). */
       forwardOperatorHeaders: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_HEADERS, true),
       forwardOperatorQuery: parseEnvBool(process.env.TELEOP_FORWARD_OPERATOR_QUERY, true),
       /** HTTP reverse proxy to robot dataset API (operator JWT); upstream connect + body (ms). */
@@ -341,12 +341,12 @@ const loadConfig = (argv = []) => {
 };
 
 const HELIUS_MAINNET_URL = 'https://mainnet.helius-rpc.com/?api-key=';
-// PublicNode — бесплатный, без 403; mainnet-beta.solana.com часто блокирует запросы
+// PublicNode — free, no 403; mainnet-beta.solana.com often blocks requests
 const PUBLIC_RPC_URL = 'https://solana-rpc.publicnode.com';
 
 /**
  * Returns resolved Solana RPC URL from settings (provider + key or custom URL).
- * mainnet-beta.solana.com часто блокирует (403), поэтому не используем его как fallback.
+ * mainnet-beta.solana.com often returns 403, so we do not use it as fallback.
  * @param {{ rpcProvider?: string, heliusApiKey?: string, rpcUrl?: string }} solana
  */
 const buildSolanaRpcUrl = (solana = {}) => {

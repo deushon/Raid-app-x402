@@ -463,7 +463,7 @@ const loadClientSettings = async () => {
     const data = await api.getClientSettings();
     if (rpcProviderSelect) rpcProviderSelect.value = data.rpcProvider || 'public';
     const heliusInput = document.getElementById('rpc-helius-key');
-    if (heliusInput && data.hasHeliusKey) heliusInput.placeholder = '•••••••• (уже задан)';
+    if (heliusInput && data.hasHeliusKey) heliusInput.placeholder = '•••••••• (already set)';
     const customInput = document.getElementById('rpc-custom-url');
     if (customInput && data.customRpcUrl) customInput.value = data.customRpcUrl;
     updateRpcOptionVisibility();
