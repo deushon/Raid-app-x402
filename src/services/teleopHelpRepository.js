@@ -179,6 +179,47 @@ async function getHelpRequestForRobotClaim(pool, { helpRequestId, robotId }) {
   return r.rows[0] || null;
 }
 
+/**
+ * @param {import('pg').Pool} pool
+ * @param {{ helpRequestId: string, payload: string, signature: string }} input
+ */
+async function setHelpRequestTeleopGrant(pool, { helpRequestId, payload, signature }) {
+  await pool.query(
+    `UPDATE help_requests
+     SET teleop_grant_payload = $2, teleop_grant_signature = $3
+     WHERE id = $1::uuid`,
+    [helpRequestId, payload, signature],
+  );
+}
+
+/**
+ * Signed SessionGrant for robot (KYR), after an operator has claimed the request.
+ * @param {import('pg').Pool} pool
+ * @param {{ helpRequestId: string, robotId: string }} input
+ * @returns {Promise<{ status: string, teleop_grant_payload: string | null, teleop_grant_signature: string | null } | null>}
+ */
+async function getTeleopSessionGrantForRobot(pool, { helpRequestId, robotId }) {
+  const r = await pool.query(
+    `SELECT status, teleop_grant_payload, teleop_grant_signature
+     FROM help_requests WHERE id = $1::uuid AND robot_id = $2`,
+    [helpRequestId, robotId],
+  );
+  return r.rows[0] || null;
+}
+
+/**
+ * Operator Solana pubkey at claim time (for signing grant in route).
+ * @param {import('pg').Pool} pool
+ * @param {string} teleoperatorId
+ */
+async function getTeleoperatorWalletPublicKey(pool, teleoperatorId) {
+  const r = await pool.query(
+    `SELECT wallet_public_key FROM teleoperators WHERE id = $1::uuid`,
+    [teleoperatorId],
+  );
+  return r.rows[0]?.wallet_public_key || null;
+}
+
 module.exports = {
   createHelpRequest,
   listOpenHelpRequests,
@@ -189,4 +230,7 @@ module.exports = {
   endTeleopSession,
   updateHelpRequestPeaqClaim,
   getHelpRequestForRobotClaim,
+  setHelpRequestTeleopGrant,
+  getTeleopSessionGrantForRobot,
+  getTeleoperatorWalletPublicKey,
 };

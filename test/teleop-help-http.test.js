@@ -24,6 +24,10 @@ const {
   createRequireTeleopSession,
 } = require('../src/middleware/teleopSession');
 const { createPeaqClaimService } = require('../src/services/peaqClaimService');
+const { createTeleopSessionGrantService } = require('../src/services/teleopSessionGrantService');
+const { ed25519 } = require('@noble/curves/ed25519');
+const bs58Module = require('bs58');
+const bs58 = bs58Module.encode ? bs58Module : bs58Module.default;
 
 const connectionString = process.env.TEST_DATABASE_URL;
 const run = connectionString ? describe : describe.skip;
@@ -33,6 +37,7 @@ run('teleop help HTTP', () => {
   let app;
   let registry;
   let grantRepository;
+  let grantSigningKeypair;
   const teleopSecret = 'test-teleop-secret-xyz';
   const fleetSecret = 'fleet-teleop-help-test';
 
@@ -55,6 +60,13 @@ run('teleop help HTTP', () => {
     registry = new RobotRegistry({ healthMonitor, robotRepository });
     await registry.loadFromPersistence();
     grantRepository = createTeleoperatorRobotGrantRepository(pool);
+
+    grantSigningKeypair = Keypair.generate();
+    const teleopSessionGrantService = createTeleopSessionGrantService({
+      signingSecretKey: JSON.stringify(Array.from(grantSigningKeypair.secretKey)),
+      ttlSec: 3600,
+      operatorFlatPaymentSol: 0.0005,
+    });
 
     const teleopCfg = {
       teleoperator: {
@@ -108,6 +120,7 @@ run('teleop help HTTP', () => {
         grantRepository,
         peaqClaimService: mockPeaqClaimService,
         peaqClaimSyncTimeoutMs: 30000,
+        teleopSessionGrantService,
       }),
     );
     app.use(
@@ -173,6 +186,11 @@ run('teleop help HTTP', () => {
       .expect(201);
     assert.equal(resHelp.body.duplicate, false);
     const helpId = resHelp.body.helpRequest.id;
+    assert.ok(
+      typeof resHelp.body.teleopGrantPollUrl === 'string'
+        && resHelp.body.teleopGrantPollUrl.includes(helpId)
+        && resHelp.body.teleopGrantPollUrl.includes('/teleop/session-grant'),
+    );
 
     const walletPk = Keypair.generate().publicKey.toBase58();
     const agent = request.agent(app);
@@ -195,8 +213,50 @@ run('teleop help HTTP', () => {
       .expect(200);
     assert.ok(acc.body.session?.id);
 
+    const grantRes = await request(app)
+      .get(`/api/robots/${robotId}/teleop/session-grant`)
+      .query({ helpRequestId: helpId })
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(200);
+    assert.ok(typeof grantRes.body.teleopGrantPayload === 'string');
+    assert.ok(typeof grantRes.body.teleopGrantSignature === 'string');
+    const grantObj = JSON.parse(grantRes.body.teleopGrantPayload);
+    assert.equal(grantObj.operator_pubkey, walletPk);
+    assert.equal(grantObj.robot_id, robotId);
+    assert.equal(grantObj.session_id, acc.body.session.id);
+    const scope = JSON.parse(grantObj.scope_json);
+    assert.equal(scope.teleop_payment_mode, 'flat');
+    assert.equal(scope.teleop_operator_flat_sol, 0.0005);
+    const msg = new TextEncoder().encode(grantRes.body.teleopGrantPayload);
+    const sig = bs58.decode(grantRes.body.teleopGrantSignature);
+    assert.ok(ed25519.verify(sig, msg, grantSigningKeypair.publicKey.toBytes()));
+    assert.equal(
+      grantRes.body.grantSignerPublicKey,
+      grantSigningKeypair.publicKey.toBase58(),
+    );
+
     await agent.get('/api/teleoperator/help-requests').expect(200);
     assert.equal((await agent.get('/api/teleoperator/help-requests')).body.helpRequests.length, 0);
+  });
+
+  test('GET session-grant returns grant_not_ready before accept', async () => {
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65531,
+      teleopSecret,
+    });
+    const h = await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'open' })
+      .expect(201);
+    const nid = h.body.helpRequest.id;
+    const g = await request(app)
+      .get(`/api/robots/${reg.id}/teleop/session-grant`)
+      .query({ helpRequestId: nid })
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(404);
+    assert.equal(g.body.error, 'grant_not_ready');
   });
 
   test('duplicate open help returns 200 and duplicate true', async () => {

@@ -175,7 +175,7 @@ npm run peaq:faucet -- 0xYourEvmAddress
 
 | Метод            | Путь                       | Описание                                 |
 | ---------------- | -------------------------- | ---------------------------------------- |
-| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`** |
+| `GET`            | `/health`                  | Статус сервиса, число роботов, флаг x402, **`teleoperatorEnabled`**, **`teleopWs`**, **`teleopGrantSignerPublicKey`** (Solana base58 подписанта SessionGrant при **`TELEOP_GRANT_SIGNING_SECRET_KEY`**, иначе `null`) |
 | `GET`            | `/api/robots`              | Публичный список роботов **без** `teleopSecret`. Персистентность как выше. |
 | `POST`           | `/api/robots/enroll`       | Саморегистрация флота: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` или **`X-Robot-Fleet-Secret`**), тело с **`enrollmentKey`** (стабильный id устройства), `host`, `port`, опционально `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (для прокси датасета; порт по умолчанию на стороне Raid — **9191**, если не задан). Идемпотентный upsert; в ответе есть `teleopSecret`. Ожидаемые ошибки: **503** (секрет флота не настроен), **401** с упоминанием **fleet credential** (секрет не совпал). |
 | `POST`           | `/api/robots`              | Новая регистрация (новый UUID): тот же секрет флота **или** сессия админа. Полный ответ с `teleopSecret`. |
@@ -203,8 +203,8 @@ npm run peaq:faucet -- 0xYourEvmAddress
 | `GET` / `POST` | `/api/client/settings` | Чтение / сохранение RPC-настроек (ключ Helius в ответе не отдаётся)     |
 | `GET`          | `/api/client/robots`   | Готовые роботы для direct-режима                                        |
 | `GET`          | `/api/client/commands` | Агрегат команд по реестру                                               |
-| `POST`         | `/api/client/estimate` | Оценка цены: `mode` `direct` | `raid`, `command`, опционально `robotId` |
-| `POST`         | `/api/client/invoice`  | Прокси первого POST на робота → **200** или **402** (инвойс)            |
+| `POST`         | `/api/client/estimate` | Оценка цены: `mode` `direct` \| `raid`, `command`, опционально `robotId`. Команда **`any_teleop`**: все готовые роботы кандидаты; путь на роботе по умолчанию **`/x402/any_teleop`** (**`ANY_TELEOP_HTTP_PATH`**); если в **`availableMethods`** нет цены — оценка **`ANY_TELEOP_FIXED_SOL`** (по умолчанию **0.0005** SOL). |
+| `POST`         | `/api/client/invoice`  | Прокси первого POST на робота → **200** или **402** (инвойс). Для **`any_teleop`** — тот же путь и логика выбора робота, что в **`/estimate`**.            |
 | `POST`         | `/api/client/execute`  | После оплаты в кошельке: проверка tx, вызов робота с `X-X402-Reference` |
 
 
@@ -230,7 +230,8 @@ npm run peaq:faucet -- 0xYourEvmAddress
 | `POST` | `/api/teleoperator/login`    | `login`, `password`; cookie + **`accessToken`**.                                              |
 | `POST` | `/api/teleoperator/logout`   | Сброс cookie.                                                                                 |
 | `GET`  | `/api/teleoperator/me`       | Профиль: cookie **`teleop_token`** или заголовок **`Authorization: Bearer`** с JWT.         |
-| `POST` | `/api/robots/{id}/teleop/help` | Робот запрашивает помощь (LAN): **`X-Robot-Teleop-Secret`**, JSON с обязательным строковым **`message`** и объектом **`metadata`** (нормализуется: **`task_id`**, **`error_context`**, **`situation_report`** — строки, пустые если не прислали; опциональный длинный UTF-8 отчёт **`situation_report`** до ~64 KiB, лишнее обрезается; опциональный объект **`kyr_peaq_context`** до 64 KiB JSON, иначе **413**). Ответ: **`helpRequest`**, **`duplicate`**, топ-уровневый **`id`** (тот же UUID заявки), при настроенном Peaq — опционально **`peaq_claim`**. Без тела/`message` → **400**. Повтор при уже открытой заявке → **200** и `duplicate: true`. |
+| `POST` | `/api/robots/{id}/teleop/help` | Робот запрашивает помощь (LAN): **`X-Robot-Teleop-Secret`**, JSON с обязательным строковым **`message`** и объектом **`metadata`** (нормализуется: **`task_id`**, **`error_context`**, **`situation_report`** — строки, пустые если не прислали; опциональный длинный UTF-8 отчёт **`situation_report`** до ~64 KiB, лишнее обрезается; опциональный объект **`kyr_peaq_context`** до 64 KiB JSON, иначе **413**). Ответ: **`helpRequest`**, **`duplicate`**, топ-уровневый **`id`** (тот же UUID заявки), при настроенном Peaq — опционально **`peaq_claim`**. Подписанный SessionGrant для KYR в ответе **не** отдаётся (оператор ещё не назначен). Без тела/`message` → **400**. Повтор при уже открытой заявке → **200** и `duplicate: true`. |
+| `GET`  | `/api/robots/{id}/teleop/session-grant?helpRequestId=` | Тот же **`X-Robot-Teleop-Secret`**. После **`accept`** оператором и при **`TELEOP_GRANT_SIGNING_SECRET_KEY`**: **`teleopGrantPayload`** (строка JSON SessionGrant) и **`teleopGrantSignature`** (Ed25519, base58 по UTF-8 байтам payload). **404**: `grant_not_ready` (заявка ещё open), `grant_unconfigured` (ключ не задан), `grant_absent` (у оператора нет **`walletPublicKey`**). См. [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md). |
 | `GET`  | `/api/robots/{id}/peaq/claim?helpRequestId=` | Тот же **`X-Robot-Teleop-Secret`**. Возвращает **`{ peaq_claim }`** или **404** `{ "error": "claim_not_ready" }` пока клейм не готов. **`helpRequestId`** — UUID из **`id`** / **`helpRequest.id`** ответа help. |
 | `GET`  | `/api/teleoperator/help-requests` | Список открытых заявок (JWT).                                                          |
 | `POST` | `/api/teleoperator/help-requests/{id}/accept` | Принять заявку → **`session.id`**. Если у робота есть **хотя бы одна** активная выдача в **`teleoperator_robot_grants`**, принять может только выданный оператор; иначе — любой вошедший (как раньше). |
@@ -253,13 +254,25 @@ npm run peaq:faucet -- 0xYourEvmAddress
 
 HTTP-вызов с робота «запросить помощь» (без JWT оператора): [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md).
 
+#### Оплата телеоператору в SOL (полный цикл x402 на роботе)
+
+RAID **не** списывает SOL с сервера за работу оператора: он выдаёт **подписанный SessionGrant** с **`operator_pubkey`** (кошелёк из БД при регистрации телеоператора). **Перевод SOL** выполняет **робот** после закрытия сессии KYR (сервис **`/x402/complete_teleop_payment`**, тот же стек, что и покупки x402), если на роботе это включено.
+
+**На стороне RAID перед тестом:**
+
+1. В **`.env`**: **`TELEOP_GRANT_SIGNING_SECRET_KEY`** (Solana secret, формат как у **`X402_SOLANA_SECRET_KEY`**). Без него **`GET …/teleop/session-grant`** вернёт **`grant_unconfigured`**.
+2. У телеоператора в БД заполнен **`wallet_public_key`** (при регистрации). Иначе после accept — **`grant_absent`**.
+3. **`GET /health`** → **`teleopGrantSignerPublicKey`**: этот base58 pubkey добавить в **`trusted_raid_keys`** на KYR робота (см. [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md)).
+4. Поток: робот **`POST …/teleop/help`** → оператор **`accept`** → робот поллит **`GET …/teleop/session-grant?helpRequestId=`** (в ответе help при включённом подписании есть **`teleopGrantPollUrl`**) → перед **`open_session`** в KYR передать **`teleopGrantPayload`** / **`teleopGrantSignature`** с RAID → по завершении сессии оплата на **`operator_pubkey`**.
+5. Если в логах робота **`pending_from_raid`** / нет on-chain transfer: чаще всего KYR открыл сессию **до** получения гранта с RAID или **не доверяет** подписи (сверьте **`teleopGrantSignerPublicKey`** из **`GET …/session-grant`** или **`GET /health`** с **`trusted_raid_keys`** на роботе). Подробнее: [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md §7](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
+
 Полная схема запросов/ответов — в **Swagger** (`/docs`). Детали протокола x402 в приложении — [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
 ## Ожидания от роботов
 
 - `GET /health` или `/helth` → `{ status, message?, availableMethods?, location? }`.
 - `POST /commands/dance`, `POST /commands/buy-cola` с телами согласно команде.
-- Для платных эндпоинтов — ответ **402** в формате V2 (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`).
+- Для платных эндпоинтов — ответ **402** в формате V2 (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`). Для **`any_teleop`** (ROS_X402_PAY) ожидается HTTP **`POST`** на пути вроде **`/x402/any_teleop`** с тем же контрактом **402**; клиентский UI может вызывать команду **`any_teleop`** через **`/api/client/invoice`** (Raid проксирует на **`ANY_TELEOP_HTTP_PATH`**).
 - Для телеопа: на роботе доступен **ROSBridge WebSocket** (часто порт **9090**) с той же LAN, откуда `raid_app` достучится до `rosbridgeHost` / `rosbridgePort`. Скрипт на роботе может вызывать **`POST /api/robots/{robotId}/teleop/help`** с секретом, заданным при регистрации робота в админке (подробнее: [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md)). После принятия заявки оператором на исходящем соединении к rosbridge пробрасываются **id/login оператора** (см. таблицу `TELEOP_FORWARD_*` выше) — при необходимости обработайте их в прокси на роботе.
 - Для выгрузки датасета с операторского клиента: с той же LAN `raid_app` должен открывать TCP к **`datasetHttpHost` / `datasetHttpPort`** (по умолчанию **`host`** и **9191**). Оператор ходит только на Raid (**`/api/teleop/robots/{id}/dataset/...`**), не на робот напрямую из интернета.
 
@@ -299,6 +312,7 @@ npm test
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` с робота (`teleop_fetch`) и связь с WS/rosbridge.
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — поле **`payload.metadata.situation_report`** для VR/операторского UI (список заявок и WS).
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — гайд для агента/разработчика **кода на роботе**: enroll, секреты, help, allowlist, rosbridge.
+- [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — для разработчика робота: порядок вызовов RAID → KYR, SessionGrant, `trusted_raid_keys`, устранение `pending_from_raid` и отсутствия оплаты оператору.
 
 ## Прочее
 

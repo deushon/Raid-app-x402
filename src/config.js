@@ -258,6 +258,34 @@ const loadConfig = (argv = []) => {
         process.env.TELEOP_DATASET_PROXY_TIMEOUT_MS,
         300000,
       ),
+      /** Ed25519 signing key for KYR SessionGrant (Solana secret format; pubkey exposed in /health as teleopGrantSignerPublicKey). */
+      grantSigningSecretKey: (() => {
+        const v = process.env.TELEOP_GRANT_SIGNING_SECRET_KEY;
+        if (v === undefined || v === null) return null;
+        const t = String(v).trim();
+        return t || null;
+      })(),
+      grantTtlSec: toNumber(process.env.TELEOP_GRANT_TTL_SEC, 86400),
+      /** Hint in SessionGrant scope_json for flat SOL payment to operator (rospy_x402 / ROS_X402_PAY). */
+      operatorFlatPaymentSol: (() => {
+        const raw = process.env.TELEOP_OPERATOR_FLAT_SOL;
+        const n = raw === undefined || raw === null || String(raw).trim() === ''
+          ? 0.0005
+          : Number(String(raw).trim());
+        return Number.isFinite(n) && n >= 0 ? n : 0.0005;
+      })(),
+      /** Client /invoice and /estimate: command `any_teleop` → this HTTP path on the robot (ROS_X402_PAY). */
+      anyTeleopHttpPath: (() => {
+        const p = (process.env.ANY_TELEOP_HTTP_PATH || '/x402/any_teleop').trim();
+        return p.startsWith('/') ? p : `/${p}`;
+      })(),
+      anyTeleopFixedSol: (() => {
+        const raw = process.env.ANY_TELEOP_FIXED_SOL;
+        const n = raw === undefined || raw === null || String(raw).trim() === ''
+          ? 0.0005
+          : Number(String(raw).trim());
+        return Number.isFinite(n) && n >= 0 ? n : 0.0005;
+      })(),
     },
     peaq: (() => {
       const peaqEnabled = parseEnvBool(process.env.PEAQ_ENABLED, false);

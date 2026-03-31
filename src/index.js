@@ -31,6 +31,7 @@ const { ensureTeleoperatorRobotGrantsSchema } = require('./db/ensureTeleoperator
 const { createRobotRepository } = require('./services/robotRepository');
 const { createTeleoperatorRobotGrantRepository } = require('./services/teleoperatorRobotGrantRepository');
 const createTeleopHelpRouter = require('./routes/teleopHelp');
+const { createTeleopSessionGrantService } = require('./services/teleopSessionGrantService');
 const { createPeaqClaimService } = require('./services/peaqClaimService');
 const { createTeleopDatasetProxyMiddleware } = require('./services/teleopDatasetProxy');
 const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
@@ -94,6 +95,13 @@ const bootstrap = async () => {
   const teleopHub = pool ? createTeleopOperatorHub() : null;
   const peaqClaimService = createPeaqClaimService(config.peaq);
   const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
+  const teleopSessionGrantService = pool
+    ? createTeleopSessionGrantService({
+      signingSecretKey: config.teleop.grantSigningSecretKey,
+      ttlSec: config.teleop.grantTtlSec,
+      operatorFlatPaymentSol: config.teleop.operatorFlatPaymentSol,
+    })
+    : null;
 
   const attachTeleopUser = pool ? createAttachTeleopUser(config.teleoperator) : null;
   const requireTeleopSessionJson = pool ? createRequireTeleopSession({ mode: 'json' }) : null;
@@ -188,6 +196,7 @@ const bootstrap = async () => {
         grantRepository,
         peaqClaimService,
         peaqClaimSyncTimeoutMs: config.peaq.claimSyncTimeoutMs,
+        teleopSessionGrantService,
       }),
     );
   }
@@ -233,6 +242,10 @@ const bootstrap = async () => {
    *                   type: boolean
    *                   description: WebSocket teleop upgrade handler enabled (DATABASE_URL + TELEOP_WS_ENABLED)
    *                   example: true
+   *                 teleopGrantSignerPublicKey:
+   *                   type: string
+   *                   nullable: true
+   *                   description: Solana base58 pubkey of the Ed25519 key used to sign KYR SessionGrants when TELEOP_GRANT_SIGNING_SECRET_KEY is set; null otherwise
    */
   app.get('/health', (req, res) => {
     res.json({
@@ -242,6 +255,7 @@ const bootstrap = async () => {
       x402Configured: x402Service.isConfigured(),
       teleoperatorEnabled: Boolean(pool),
       teleopWs: Boolean(pool && teleopHub && config.teleop?.enabled),
+      teleopGrantSignerPublicKey: teleopSessionGrantService?.signerPublicKeyBase58() ?? null,
     });
   });
 

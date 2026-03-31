@@ -42,6 +42,14 @@ async function ensureTeleopHelpSchema(pool) {
     ALTER TABLE help_requests
     ADD COLUMN IF NOT EXISTS peaq_claim JSONB;
   `);
+  await pool.query(`
+    ALTER TABLE help_requests
+    ADD COLUMN IF NOT EXISTS teleop_grant_payload TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE help_requests
+    ADD COLUMN IF NOT EXISTS teleop_grant_signature TEXT;
+  `);
 }
 
 module.exports = { ensureTeleopHelpSchema };

@@ -28,6 +28,11 @@ test('OpenAPI defines PeaqClaim and GET /api/robots/{robotId}/peaq/claim', () =>
   assert.ok(swaggerSpec.paths['/api/robots/{robotId}/peaq/claim'].get);
 });
 
+test('OpenAPI documents GET /api/robots/{robotId}/teleop/session-grant', () => {
+  const p = swaggerSpec.paths['/api/robots/{robotId}/teleop/session-grant'];
+  assert.ok(p && p.get, 'session-grant route must be in swagger');
+});
+
 test('OpenAPI documents teleoperator JWT lifetime and where it is required', () => {
   const teleopTag = swaggerSpec.tags.find((t) => t.name === 'Teleoperator');
   assert.ok(teleopTag);

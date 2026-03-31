@@ -11,11 +11,19 @@ describe('teleop config env', () => {
       'TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS',
       'TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS',
       'TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS',
+      'TELEOP_GRANT_SIGNING_SECRET_KEY',
+      'TELEOP_GRANT_TTL_SEC',
+      'TELEOP_OPERATOR_FLAT_SOL',
+      'ANY_TELEOP_HTTP_PATH',
+      'ANY_TELEOP_FIXED_SOL',
     ];
     keys.forEach((k) => {
       backup[k] = process.env[k];
       delete process.env[k];
     });
+    // loadConfig() вызывает loadEnvFile: удалённые ключи снова подмешиваются из .env в cwd.
+    // Пустая строка не перезаписывается из файла и даёт grantSigningSecretKey: null в config.
+    process.env.TELEOP_GRANT_SIGNING_SECRET_KEY = '';
   });
 
   afterEach(() => {
@@ -37,6 +45,11 @@ describe('teleop config env', () => {
       Number.isFinite(c.teleop.rosbridgeDropReconnectAttempts)
         && c.teleop.rosbridgeDropReconnectAttempts >= 0,
     );
+    assert.equal(c.teleop.operatorFlatPaymentSol, 0.0005);
+    assert.equal(c.teleop.anyTeleopFixedSol, 0.0005);
+    assert.equal(c.teleop.anyTeleopHttpPath, '/x402/any_teleop');
+    assert.equal(c.teleop.grantSigningSecretKey, null);
+    assert.equal(c.teleop.grantTtlSec, 86400);
   });
 
   test('env overrides', () => {

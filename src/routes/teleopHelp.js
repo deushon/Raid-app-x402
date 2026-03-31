@@ -9,6 +9,9 @@ const {
   acceptHelpRequest,
   updateHelpRequestPeaqClaim,
   getHelpRequestForRobotClaim,
+  setHelpRequestTeleopGrant,
+  getTeleopSessionGrantForRobot,
+  getTeleoperatorWalletPublicKey,
 } = require('../services/teleopHelpRepository');
 const {
   normalizeRobotTeleopHelpBody,
@@ -72,6 +75,7 @@ function readRobotTeleopSecret(req) {
  * @param {ReturnType<import('../services/teleoperatorRobotGrantRepository').createTeleoperatorRobotGrantRepository>|null} [deps.grantRepository]
  * @param {{ isEnabled: () => boolean, buildClaim: (input: { helpRequestId: string, robotId: string }) => Promise<object>, buildFailureClaim?: (input: { helpRequestId: string, robotId: string, errorMessage?: string }) => object }|null} [deps.peaqClaimService]
  * @param {number} [deps.peaqClaimSyncTimeoutMs]
+ * @param {ReturnType<import('../services/teleopSessionGrantService').createTeleopSessionGrantService>|null} [deps.teleopSessionGrantService]
  */
 function createTeleopHelpRouter({
   pool,
@@ -82,6 +86,7 @@ function createTeleopHelpRouter({
   grantRepository = null,
   peaqClaimService = null,
   peaqClaimSyncTimeoutMs = 2500,
+  teleopSessionGrantService = null,
 }) {
   const router = express.Router();
 
@@ -92,7 +97,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. If `did.read` fails, RAID stores a fallback claim with **raid_peaq_read_status=failed** (help request still succeeds). WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **TELEOP_GRANT_SIGNING_SECRET_KEY** is set, response includes **`teleopGrantPollUrl`** (relative path) — after operator **accept**, `GET` that URL with the same robot secret to obtain **`teleopGrantPayload`** / **`teleopGrantSignature`** before KYR `open_session` (otherwise KYR keeps mock `operator_pubkey` / `pending_from_raid`). When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. If `did.read` fails, RAID stores a fallback claim with **raid_peaq_read_status=failed** (help request still succeeds). WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -203,6 +208,9 @@ function createTeleopHelpRouter({
       if (peaq_claim != null) {
         jsonBody.peaq_claim = peaq_claim;
       }
+      if (teleopSessionGrantService && teleopSessionGrantService.isConfigured()) {
+        jsonBody.teleopGrantPollUrl = `/api/robots/${robotId}/teleop/session-grant?helpRequestId=${row.id}`;
+      }
       return res.status(statusCode).json(jsonBody);
     } catch (error) {
       if (error instanceof KyrPeaqContextTooLargeError) {
@@ -286,6 +294,99 @@ function createTeleopHelpRouter({
     } catch (error) {
       logger.error('peaq claim fetch failed', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch peaq claim' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/robots/{robotId}/teleop/session-grant:
+   *   get:
+   *     tags:
+   *       - Teleop
+   *     summary: Fetch signed SessionGrant for KYR (robot secret)
+   *     description: >
+   *       Same authentication as POST teleop/help. After an operator accepts the help request, RAID stores
+   *       **teleopGrantPayload** (UTF-8 JSON string) and **teleopGrantSignature** (Ed25519, base58 over raw UTF-8 bytes)
+   *       when **TELEOP_GRANT_SIGNING_SECRET_KEY** is configured. Response includes **grantSignerPublicKey** for KYR **trusted_raid_keys** alignment.
+   *       Returns **404** `grant_not_ready` while the request is still open,
+   *       **404** `grant_unconfigured` when signing is disabled, or **404** `grant_absent` if the operator had no wallet pubkey.
+   *     parameters:
+   *       - in: path
+   *         name: robotId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: query
+   *         name: helpRequestId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Grant available (variant A).
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 teleopGrantPayload:
+   *                   type: string
+   *                 teleopGrantSignature:
+   *                   type: string
+   *                 grantSignerPublicKey:
+   *                   type: string
+   *                   description: Solana base58 pubkey of RAID grant signer (same as GET /health teleopGrantSignerPublicKey); must be trusted on KYR
+   *       400:
+   *         description: Missing or invalid helpRequestId.
+   *       401:
+   *         description: Invalid or missing robot secret.
+   *       404:
+   *         description: Robot not found, request not for this robot, or grant not available.
+   */
+  router.get('/robots/:robotId/teleop/session-grant', async (req, res) => {
+    try {
+      const { robotId } = req.params;
+      const robot = registry.getById(robotId);
+      if (!robot) {
+        return res.status(404).json({ error: 'Robot not found' });
+      }
+      if (!robot.teleopSecret) {
+        return res.status(401).json({ error: 'Teleop secret not configured for this robot' });
+      }
+      const secret = readRobotTeleopSecret(req);
+      if (!secret || !constantTimeCompare(secret, robot.teleopSecret)) {
+        return res.status(401).json({ error: 'Invalid or missing X-Robot-Teleop-Secret' });
+      }
+      const helpRequestId = req.query.helpRequestId;
+      if (helpRequestId == null || helpRequestId === '') {
+        return res.status(400).json({ error: 'helpRequestId query parameter is required' });
+      }
+      if (typeof helpRequestId !== 'string' || !validateUuid(helpRequestId)) {
+        return res.status(400).json({ error: 'helpRequestId must be a valid UUID' });
+      }
+      if (!teleopSessionGrantService || !teleopSessionGrantService.isConfigured()) {
+        return res.status(404).json({ error: 'grant_unconfigured' });
+      }
+      const row = await getTeleopSessionGrantForRobot(pool, { helpRequestId, robotId });
+      if (!row) {
+        return res.status(404).json({ error: 'Help request not found for this robot' });
+      }
+      if (row.status === 'open') {
+        return res.status(404).json({ error: 'grant_not_ready' });
+      }
+      if (!row.teleop_grant_payload || !row.teleop_grant_signature) {
+        return res.status(404).json({ error: 'grant_absent' });
+      }
+      return res.json({
+        teleopGrantPayload: row.teleop_grant_payload,
+        teleopGrantSignature: row.teleop_grant_signature,
+        grantSignerPublicKey: teleopSessionGrantService.signerPublicKeyBase58(),
+      });
+    } catch (error) {
+      logger.error('teleop session grant fetch failed', { error: error.message });
+      return res.status(500).json({ error: 'Failed to fetch teleop session grant' });
     }
   });
 
@@ -380,6 +481,46 @@ function createTeleopHelpRouter({
       });
       if (!result) {
         return res.status(409).json({ error: 'Help request is not open or was already claimed' });
+      }
+      if (teleopSessionGrantService && teleopSessionGrantService.isConfigured()) {
+        const wallet = await getTeleoperatorWalletPublicKey(pool, teleoperatorId);
+        if (!wallet) {
+          logger.warn('teleop grant skipped: teleoperator has no wallet_public_key', {
+            teleoperatorId,
+            helpRequestId: result.helpRequest.id,
+          });
+        } else {
+          try {
+            const meta = result.helpRequest.payload && typeof result.helpRequest.payload === 'object'
+              ? result.helpRequest.payload
+              : {};
+            const md = meta.metadata && typeof meta.metadata === 'object' ? meta.metadata : {};
+            const taskId = md.task_id != null ? String(md.task_id) : '';
+            const signed = teleopSessionGrantService.signSessionGrant({
+              sessionId: result.session.id,
+              robotId: String(result.session.robot_id),
+              taskId,
+              operatorWalletBase58: wallet,
+            });
+            await setHelpRequestTeleopGrant(pool, {
+              helpRequestId: result.helpRequest.id,
+              payload: signed.teleopGrantPayload,
+              signature: signed.teleopGrantSignature,
+            });
+            logger.info('teleop session grant stored', {
+              helpRequestId: result.helpRequest.id,
+              teleopSessionId: result.session.id,
+              robotId: result.session.robot_id,
+              operatorPubkeyPrefix: `${wallet.slice(0, 8)}…`,
+            });
+          } catch (grantErr) {
+            logger.error('teleop session grant signing failed', {
+              error: grantErr.message,
+              helpRequestId: result.helpRequest.id,
+            });
+            return res.status(500).json({ error: 'Failed to issue teleop session grant' });
+          }
+        }
       }
       return res.json({
         ok: true,
