@@ -26,14 +26,28 @@ const PEAQ_RACE_TIMEOUT = Symbol('peaqRaceTimeout');
 
 /**
  * @param {import('pg').Pool} pool
- * @param {{ buildClaim: Function }} peaqClaimService
+ * @param {{ buildClaim: Function, buildFailureClaim?: Function }} peaqClaimService
  * @param {string} helpRequestId
  * @param {string} robotId
  */
-async function persistPeaqClaim(pool, peaqClaimService, helpRequestId, robotId) {
-  const claim = await peaqClaimService.buildClaim({ helpRequestId, robotId });
-  await updateHelpRequestPeaqClaim(pool, { helpRequestId, claim });
-  return claim;
+async function persistPeaqClaimWithFallback(pool, peaqClaimService, helpRequestId, robotId) {
+  try {
+    const claim = await peaqClaimService.buildClaim({ helpRequestId, robotId });
+    await updateHelpRequestPeaqClaim(pool, { helpRequestId, claim });
+    return claim;
+  } catch (err) {
+    logger.error('peaq claim build failed', { error: err.message, helpRequestId });
+    if (typeof peaqClaimService.buildFailureClaim === 'function') {
+      const claim = peaqClaimService.buildFailureClaim({
+        helpRequestId,
+        robotId,
+        errorMessage: err.message,
+      });
+      await updateHelpRequestPeaqClaim(pool, { helpRequestId, claim });
+      return claim;
+    }
+    throw err;
+  }
 }
 
 function readRobotTeleopSecret(req) {
@@ -56,7 +70,7 @@ function readRobotTeleopSecret(req) {
  * @param {import('express').RequestHandler} deps.attachTeleopUser
  * @param {import('express').RequestHandler} deps.requireTeleopSession
  * @param {ReturnType<import('../services/teleoperatorRobotGrantRepository').createTeleoperatorRobotGrantRepository>|null} [deps.grantRepository]
- * @param {{ isEnabled: () => boolean, buildClaim: (input: { helpRequestId: string, robotId: string }) => Promise<object> }|null} [deps.peaqClaimService]
+ * @param {{ isEnabled: () => boolean, buildClaim: (input: { helpRequestId: string, robotId: string }) => Promise<object>, buildFailureClaim?: (input: { helpRequestId: string, robotId: string, errorMessage?: string }) => object }|null} [deps.peaqClaimService]
  * @param {number} [deps.peaqClaimSyncTimeoutMs]
  */
 function createTeleopHelpRouter({
@@ -78,7 +92,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. If `did.read` fails, RAID stores a fallback claim with **raid_peaq_read_status=failed** (help request still succeeds). WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -138,10 +152,12 @@ function createTeleopHelpRouter({
           peaq_claim = row.peaq_claim;
         } else {
           const timeoutMs = peaqClaimSyncTimeoutMs;
-          const buildPromise = persistPeaqClaim(pool, peaqClaimService, row.id, robotId).catch((err) => {
-            logger.error('peaq claim build failed', { error: err.message, helpRequestId: row.id });
-            return null;
-          });
+          const buildPromise = persistPeaqClaimWithFallback(pool, peaqClaimService, row.id, robotId).catch(
+            (err) => {
+              logger.error('peaq claim persist failed', { error: err.message, helpRequestId: row.id });
+              return null;
+            },
+          );
           const raced = await Promise.race([
             buildPromise,
             sleep(timeoutMs).then(() => PEAQ_RACE_TIMEOUT),
@@ -210,7 +226,7 @@ function createTeleopHelpRouter({
    *     description: >
    *       Same authentication as POST teleop/help (header X-Robot-Teleop-Secret or Bearer).
    *       Query helpRequestId must match the id from the help response.
-   *       Returns 404 with error claim_not_ready until the claim is stored (e.g. async did.read after POST).
+   *       Returns 404 with error claim_not_ready until the claim is stored (async did.read). When did.read fails, RAID stores a fallback claim with raid_peaq_read_status=failed, then this endpoint returns 200.
    *     parameters:
    *       - in: path
    *         name: robotId

@@ -60,7 +60,7 @@
 | [src/db/ensureTeleoperatorSchema.js](src/db/ensureTeleoperatorSchema.js) | DDL таблицы `teleoperators` (PostgreSQL)                         |
 | [src/services/teleoperatorRepository.js](src/services/teleoperatorRepository.js) | Пользователи телеоператора в БД (bcrypt, Solana pubkey)   |
 | [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | `help_requests`, `teleop_sessions`; колонка **`peaq_claim`** |
-| [src/services/peaqClaimService.js](src/services/peaqClaimService.js) | Peaq SDK **`did.read`**, объект **`peaq_claim`** для help / GET claim |
+| [src/services/peaqClaimService.js](src/services/peaqClaimService.js) | Peaq SDK **`did.read`**, **`buildFailureClaim`** при ошибке чтения (fallback в БД, не вечный **404**) |
 | [scripts/peaqOnboardMachine.js](scripts/peaqOnboardMachine.js) | Разовый **`did.create`** + **`sendEvmTx`** на Agung; экспорт **`onboardPeaqMachine`** для будущего enroll робота |
 | [scripts/peaqFaucetRequest.js](scripts/peaqFaucetRequest.js) | **POST** к официальному API крана AGNG из Node (обход CORS/524-страниц в браузере); **`npm run peaq:faucet`** |
 | [src/docs/swagger.js](src/docs/swagger.js)       | База OpenAPI и общие схемы для JSDoc                                             |

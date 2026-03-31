@@ -98,6 +98,28 @@ Minimal interoperable object (extend as needed):
 - Use Agung HTTPS + WSS endpoints from peaq docs (e.g. OnFinality `https://peaq-agung.api.onfinality.io/public` and matching WSS for `did.read`).
 - Store machine DID `name` / EVM `address` and SDK secrets in RAID env/config, not on the robot.
 
+### 5.1 External dependencies (faucet, RPC, Peaq SaaS)
+
+- **Testnet gas (AGNG)** comes from Peaq-operated services (docs faucet, etc.). Outages, Cloudflare **524**, CORS on error pages, or third-party paywalls are **outside RAID**; operators obtain gas independently of this app.
+- **`POST …/teleop/help` always succeeds** when the help row is created: Peaq failures do **not** turn into 500 for the robot.
+- If **`sdk.did.read`** throws or times out in the async path, RAID persists a **fallback** `peaq_claim` so **`GET …/peaq/claim`** does not return **404** forever:
+
+```json
+{
+  "schema_version": 1,
+  "network": "peaq-agung",
+  "help_request_id": "<uuid>",
+  "robot_id": "<uuid>",
+  "issued_at_unix": 1710000000,
+  "document": {},
+  "raw": {},
+  "raid_peaq_read_status": "failed",
+  "raid_peaq_error": "<short message>"
+}
+```
+
+Robots **SHOULD** treat `raid_peaq_read_status === "failed"` as a terminal claim for that help request (no valid DID document); optional logging / operator alert.
+
 ---
 
 ## 6. Size limits

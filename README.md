@@ -138,6 +138,8 @@ npm run dev                  # nodemon
 | **`PEAQ_NETWORK`** | Метка сети в JSON claim (по умолчанию **`peaq-agung`**). |
 | **`PEAQ_CLAIM_SYNC_TIMEOUT_MS`** | Мс: если **`did.read`** укладывается в этот интервал, **`peaq_claim`** может вернуться сразу в **POST …/teleop/help**; иначе клейм дописывается в фоне и забирается через **GET …/peaq/claim** (по умолчанию **2500**). |
 
+**Peaq / Agung (сбои снаружи):** недоступность RPC Peaq, крана AGNG или SDK **не ломает** **POST …/teleop/help** — заявка создаётся. Если **`did.read`** падает, в БД сохраняется fallback-объект **`peaq_claim`** с **`raid_peaq_read_status: "failed"`** и **`raid_peaq_error`** (краткий текст), чтобы **GET …/peaq/claim** не зависал на бесконечном **404**. Робот может трактовать это как «валидного DID-документа нет». Подробнее: [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md) §5.1.
+
 **Онбординг machine DID на Agung (вручную, до интеграции в enroll робота):** скрипт [`scripts/peaqOnboardMachine.js`](scripts/peaqOnboardMachine.js). Нужен кошелёк с тестовым PEAQ на Agung на газ.
 
 ```bash

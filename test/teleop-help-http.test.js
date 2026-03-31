@@ -23,6 +23,7 @@ const {
   createAttachTeleopUser,
   createRequireTeleopSession,
 } = require('../src/middleware/teleopSession');
+const { createPeaqClaimService } = require('../src/services/peaqClaimService');
 
 const connectionString = process.env.TEST_DATABASE_URL;
 const run = connectionString ? describe : describe.skip;
@@ -68,6 +69,15 @@ run('teleop help HTTP', () => {
     const attachTeleopUser = createAttachTeleopUser(teleopCfg.teleoperator);
     const teleopHub = createTeleopOperatorHub();
 
+    const peaqFailureHelper = createPeaqClaimService({
+      enabled: true,
+      httpBaseUrl: 'https://example.invalid',
+      wssBaseUrl: 'wss://example.invalid',
+      machineDidName: 'test_machine',
+      machineEvmAddress: `0x${'0'.repeat(40)}`,
+      networkLabel: 'peaq-agung',
+      claimSyncTimeoutMs: 2500,
+    });
     const mockPeaqClaimService = {
       isEnabled: () => true,
       buildClaim: async ({ helpRequestId, robotId }) => ({
@@ -79,6 +89,7 @@ run('teleop help HTTP', () => {
         document: { id: 'did:peaq:0xtest' },
         raw: {},
       }),
+      buildFailureClaim: (input) => peaqFailureHelper.buildFailureClaim(input),
     };
 
     app = express();
@@ -523,5 +534,75 @@ run('teleop help HTTP', () => {
       .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=${h.body.helpRequest.id}`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
       .expect(404);
+  });
+
+  test('POST help peaq fallback when buildClaim rejects: stored failure claim, GET returns 200', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65522,
+      teleopSecret,
+    });
+
+    const failSvc = createPeaqClaimService({
+      enabled: true,
+      httpBaseUrl: 'https://example.invalid',
+      wssBaseUrl: 'wss://example.invalid',
+      machineDidName: 'm',
+      machineEvmAddress: `0x${'1'.repeat(40)}`,
+      networkLabel: 'peaq-agung',
+      claimSyncTimeoutMs: 2500,
+    });
+
+    const localApp = express();
+    localApp.use(express.json());
+    localApp.use(cookieParser());
+    const teleopCfgLocal = {
+      teleoperator: {
+        jwtSecret: 'test-secret-key-for-jwt-signing',
+        jwtExpiresIn: '1h',
+        cookieName: 'teleop_token',
+        bcryptRounds: 4,
+        cookieSecureMode: 'never',
+      },
+    };
+    const attachLocal = createAttachTeleopUser(teleopCfgLocal.teleoperator);
+    localApp.use(
+      '/api',
+      createTeleopHelpRouter({
+        pool,
+        registry,
+        teleopHub: createTeleopOperatorHub(),
+        attachTeleopUser: attachLocal,
+        requireTeleopSession: createRequireTeleopSession({ mode: 'json' }),
+        grantRepository,
+        peaqClaimService: {
+          isEnabled: () => true,
+          buildClaim: async () => {
+            throw new Error('did.read simulated failure');
+          },
+          buildFailureClaim: (input) => failSvc.buildFailureClaim(input),
+        },
+        peaqClaimSyncTimeoutMs: 30000,
+      }),
+    );
+
+    const resHelp = await request(localApp)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'm' })
+      .expect(201);
+    assert.equal(resHelp.body.peaq_claim.raid_peaq_read_status, 'failed');
+    assert.match(String(resHelp.body.peaq_claim.raid_peaq_error || ''), /simulated failure/i);
+
+    const ok = await request(localApp)
+      .get(`/api/robots/${reg.id}/peaq/claim?helpRequestId=${resHelp.body.helpRequest.id}`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(200);
+    assert.equal(ok.body.peaq_claim.raid_peaq_read_status, 'failed');
   });
 });

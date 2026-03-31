@@ -81,6 +81,12 @@ function truncatePeaqClaimJson(claim, maxBytes = MAX_PEAQ_CLAIM_JSON_BYTES) {
     document: claim.document,
     raw: {},
   };
+  if (claim.raid_peaq_read_status != null) {
+    base.raid_peaq_read_status = claim.raid_peaq_read_status;
+  }
+  if (claim.raid_peaq_error != null) {
+    base.raid_peaq_error = claim.raid_peaq_error;
+  }
   if (jsonUtf8ByteLength(base) <= maxBytes) {
     return base;
   }

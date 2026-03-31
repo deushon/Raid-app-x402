@@ -36,6 +36,27 @@ function createPeaqClaimService(peaqConfig) {
   }
 
   /**
+   * Persisted when `did.read` throws: help POST still succeeds; GET …/peaq/claim returns this instead of endless 404.
+   * @param {{ helpRequestId: string, robotId: string, errorMessage?: string }} input
+   * @returns {Record<string, unknown>}
+   */
+  function buildFailureClaim({ helpRequestId, robotId, errorMessage }) {
+    const msg = String(errorMessage || 'peaq did.read failed').slice(0, 500);
+    const issuedAtUnix = Math.floor(Date.now() / 1000);
+    return truncatePeaqClaimJson({
+      schema_version: 1,
+      network: cfg.networkLabel || 'peaq-agung',
+      help_request_id: helpRequestId,
+      robot_id: robotId,
+      issued_at_unix: issuedAtUnix,
+      document: {},
+      raw: {},
+      raid_peaq_read_status: 'failed',
+      raid_peaq_error: msg,
+    });
+  }
+
+  /**
    * @param {{ helpRequestId: string, robotId: string }} input
    * @returns {Promise<Record<string, unknown>>}
    */
@@ -78,7 +99,7 @@ function createPeaqClaimService(peaqConfig) {
     }
   }
 
-  return { isEnabled, buildClaim };
+  return { isEnabled, buildClaim, buildFailureClaim };
 }
 
 module.exports = { createPeaqClaimService };

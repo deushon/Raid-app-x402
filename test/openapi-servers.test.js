@@ -20,7 +20,10 @@ test('OpenAPI defines RobotTeleopHelpRequest with situation_report', () => {
 });
 
 test('OpenAPI defines PeaqClaim and GET /api/robots/{robotId}/peaq/claim', () => {
-  assert.ok(swaggerSpec.components.schemas.PeaqClaim);
+  const peaqClaim = swaggerSpec.components.schemas.PeaqClaim;
+  assert.ok(peaqClaim);
+  assert.ok(peaqClaim.properties.raid_peaq_read_status);
+  assert.ok(peaqClaim.properties.raid_peaq_error);
   assert.ok(swaggerSpec.paths['/api/robots/{robotId}/peaq/claim']);
   assert.ok(swaggerSpec.paths['/api/robots/{robotId}/peaq/claim'].get);
 });

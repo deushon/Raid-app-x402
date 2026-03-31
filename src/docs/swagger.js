@@ -23,7 +23,7 @@ const swaggerDefinition = {
     {
       name: 'Teleop',
       description:
-        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. Body: required string **`message`**; **`metadata`** with **`task_id`**, **`error_context`**, optional **`situation_report`**, optional opaque **`kyr_peaq_context`** (max 64 KiB JSON; see **RobotTeleopHelpRequest**). Response includes top-level **`id`** (UUID of the help request) and optionally **`peaq_claim`** when **PEAQ_*** env is configured. **`GET /api/robots/{robotId}/peaq/claim?helpRequestId=`** with the same robot secret returns **`{ peaq_claim }`** or **404** `claim_not_ready`. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. Body: required string **`message`**; **`metadata`** with **`task_id`**, **`error_context`**, optional **`situation_report`**, optional opaque **`kyr_peaq_context`** (max 64 KiB JSON; see **RobotTeleopHelpRequest**). Response includes top-level **`id`** (UUID of the help request) and optionally **`peaq_claim`** when **PEAQ_*** env is configured. If **`sdk.did.read`** fails, RAID still returns **200/201** for help and stores a fallback **`peaq_claim`** with **`raid_peaq_read_status=failed`** (see **PeaqClaim**). **`GET /api/robots/{robotId}/peaq/claim?helpRequestId=`** with the same robot secret returns **`{ peaq_claim }`** when ready (including that fallback), or **404** `claim_not_ready` while the claim is still pending. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
     },
     { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
     {
@@ -227,7 +227,8 @@ const swaggerDefinition = {
       },
       PeaqClaim: {
         type: 'object',
-        description: 'Peaq DID claim bound to a help request (RAID_APP_PEAQ_CLAIM_SPEC §3).',
+        description:
+          'Peaq DID claim bound to a help request (RAID_APP_PEAQ_CLAIM_SPEC §3). If sdk.did.read fails, RAID may store a fallback with raid_peaq_read_status=failed instead of leaving the row empty.',
         properties: {
           schema_version: { type: 'integer', example: 1 },
           network: { type: 'string', example: 'peaq-agung' },
@@ -236,6 +237,12 @@ const swaggerDefinition = {
           issued_at_unix: { type: 'integer', example: 1710000000 },
           document: { type: 'object', additionalProperties: true, description: 'DID document subset from sdk.did.read' },
           raw: { type: 'object', additionalProperties: true, description: 'Optional full read payload (may be empty if truncated)' },
+          raid_peaq_read_status: {
+            type: 'string',
+            enum: ['failed'],
+            description: 'Present when RAID could not complete did.read; robot should not expect a valid Peaq document.',
+          },
+          raid_peaq_error: { type: 'string', description: 'Short error message (RAID-side); external Peaq/RPC outages are operator responsibility.' },
         },
       },
       RobotEnrollRequest: {
