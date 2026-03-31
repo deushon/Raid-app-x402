@@ -147,6 +147,14 @@ PEAQ_ONBOARD_EVM_PRIVATE_KEY=0x... npm run peaq:onboard
 
 В stdout будут **`PEAQ_MACHINE_DID_NAME`** и **`PEAQ_MACHINE_EVM_ADDRESS`** — вставьте в `.env` RAID. Ключ **`PEAQ_ONBOARD_EVM_PRIVATE_KEY`** только для отправки транзакции; в runtime RAID для **`did.read`** ключ не нужен. Экспорт **`onboardPeaqMachine`** из скрипта можно позже вызывать из кода регистрации робота.
 
+**Кран AGNG на docs.peaq.xyz («Failed to fetch» / CORS):** виджет шлёт **POST** на `dev-peaq-faucet-service.cisys.xyz`. Если origin Peaq не отвечает вовремя, Cloudflare отдаёт **524**; страница ошибки **без** заголовка `Access-Control-Allow-Origin`, и браузер показывает **CORS** — это побочный эффект, а не «ваш адрес неверный». Обход с той же машины (без CORS): [`scripts/peaqFaucetRequest.js`](scripts/peaqFaucetRequest.js) — таймаут по умолчанию **180 с**:
+
+```bash
+npm run peaq:faucet -- 0xYourEvmAddress
+```
+
+Если снова **524** или таймаут — бэкенд крана на стороне Peaq; имеет смысл написать в [Discord Peaq](https://discord.gg/peaqnetwork). Опционально: **`PEAQ_FAUCET_APIKEY`**, **`PEAQ_FAUCET_URL`**, **`PEAQ_FAUCET_TIMEOUT_MS`** (см. `config/env.example`).
+
 Идентификатор в заголовках и в query — это **UUID пользователя телеоператора** из PostgreSQL (тот же смысл, что поле **`sub`** в JWT); **сам JWT на робот не отправляется**. Логика сборки URL и заголовков: `buildRosbridgeWebSocketTarget` в [`src/ws/teleopServer.js`](src/ws/teleopServer.js). Для HTTP-прокси датасета на робот дополнительно ставятся **`X-Forwarded-For`**, **`X-Forwarded-Proto`**, **`X-Teleoperator-Id`** (и при наличии **`X-Teleoperator-Login`**); см. [`src/services/teleopDatasetProxy.js`](src/services/teleopDatasetProxy.js).
 
 ### Роботы: секрет флота, mDNS, синхронизация allowlist

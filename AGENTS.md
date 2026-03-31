@@ -62,6 +62,7 @@
 | [src/services/teleopHelpRepository.js](src/services/teleopHelpRepository.js) | `help_requests`, `teleop_sessions`; колонка **`peaq_claim`** |
 | [src/services/peaqClaimService.js](src/services/peaqClaimService.js) | Peaq SDK **`did.read`**, объект **`peaq_claim`** для help / GET claim |
 | [scripts/peaqOnboardMachine.js](scripts/peaqOnboardMachine.js) | Разовый **`did.create`** + **`sendEvmTx`** на Agung; экспорт **`onboardPeaqMachine`** для будущего enroll робота |
+| [scripts/peaqFaucetRequest.js](scripts/peaqFaucetRequest.js) | **POST** к официальному API крана AGNG из Node (обход CORS/524-страниц в браузере); **`npm run peaq:faucet`** |
 | [src/docs/swagger.js](src/docs/swagger.js)       | База OpenAPI и общие схемы для JSDoc                                             |
 | [src/services/](src/services/)                   | Реестр, health, команды, x402, платежи, выбор исполнителя, настройки             |
 
