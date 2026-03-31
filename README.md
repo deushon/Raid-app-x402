@@ -1,6 +1,6 @@
-# x402 Raid Control Service
+# Task-router-x402
 
-Node.js (Express) service that orchestrates x402 payments and robot calls. It includes a **public client UI** (`/client`), an **admin panel** (`/ui`, Basic Auth), REST APIs for the robot registry, high-level commands, and the **client flow** (estimate, 402 invoice, in-browser payment, execution with **X-X402-Reference**).
+Node.js (Express) **x402 Task Router**: orchestrates x402 payments and robot calls. It includes a **public client UI** (`/client`), an **admin panel** (`/ui`, Basic Auth), REST APIs for the robot registry, high-level commands, and the **client flow** (estimate, 402 invoice, in-browser payment, execution with **X-X402-Reference**).
 
 ## Features
 
@@ -9,11 +9,11 @@ Node.js (Express) service that orchestrates x402 payments and robot calls. It in
 - Robot health monitoring: polls `/health` and legacy `/helth` (x402 when required).
 - Robot registry: with **`DATABASE_URL`**, rows are stored in PostgreSQL (table **`robots`**) and survive restarts; **health status** stays in process memory and is updated by polling the robot. Without **`DATABASE_URL`**, the registry is RAM-only (as before).
 - **Command router**: `dance`, `buy-cola` with executor selection (price, order, random / closest to a point).
-- **RAID mode for the client**: robot selection via **AIAgentService** (strategies or **n8n** webhook), configured in the admin UI.
+- **Task Router mode for the client** (API `mode`: `raid`): robot selection via **AIAgentService** (strategies or **n8n** webhook), configured in the admin UI.
 - **ClientPaymentService**: Solana transaction verification and hooks for refund on execution failure.
 - **OpenAPI**: Swagger UI `/docs`, JSON `/docs-json` (see `src/docs/swagger.js` and JSDoc `@openapi` in routers).
 - **Teleoperator** (when `DATABASE_URL` is set): registration and login (login + password); PostgreSQL stores a **bcrypt** password hash and the **public** Solana `walletPublicKey`; session is a **JWT** in httpOnly cookie `teleop_token` and **`accessToken`** in JSON (for WebSocket and native clients). Dashboard `/teleoperator/cabinet`: open “help” requests, accept, **WebSocket URL** for ROSBridge proxy (see below).
-- **Teleop proxy (ROSBridge)**: robot and `raid_app` on the **same LAN**; the server opens an outbound WebSocket to `ws://rosbridgeHost:rosbridgePort` (default same `host`, port **9090**). By default the **teleoperator identity** is attached: headers **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** and query **`teleoperator_id`** / **`teleoperator_login`** (disable with **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Operators and VR clients connect only to **this service** (`/ws/teleop/session/...`), not directly to rosbridge from the internet. Request **`POST /api/robots/{id}/teleop/help`** with **`X-Robot-Teleop-Secret`**; **`help_request`** on **`/ws/teleoperator?token=JWT`** and rows from **`GET /api/teleoperator/help-requests`** reach **all** connected operators only if the robot has **no** active rows in **`teleoperator_robot_grants`**. If grants exist, notifications and the request list for that robot are visible **only** to operators with a grant (table **`teleoperator_robot_grants`**, UI **`/ui/teleop-access.html`**); the same set may accept. Request context in **`payload`** (including **`metadata.situation_report`**, optional **`metadata.kyr_peaq_context`** for Peaq). Optional **Peaq claim**: with **`PEAQ_ENABLED`** and configured RPC/DID see [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md); the help response includes **`id`** and on success **`peaq_claim`**, otherwise poll **`GET /api/robots/{id}/peaq/claim?helpRequestId=`**. See also [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).
+- **Teleop proxy (ROSBridge)**: robot and **Task Router** on the **same LAN**; the server opens an outbound WebSocket to `ws://rosbridgeHost:rosbridgePort` (default same `host`, port **9090**). By default the **teleoperator identity** is attached: headers **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** and query **`teleoperator_id`** / **`teleoperator_login`** (disable with **`TELEOP_FORWARD_OPERATOR_HEADERS`** / **`TELEOP_FORWARD_OPERATOR_QUERY`**). Operators and VR clients connect only to **this service** (`/ws/teleop/session/...`), not directly to rosbridge from the internet. Request **`POST /api/robots/{id}/teleop/help`** with **`X-Robot-Teleop-Secret`**; **`help_request`** on **`/ws/teleoperator?token=JWT`** and rows from **`GET /api/teleoperator/help-requests`** reach **all** connected operators only if the robot has **no** active rows in **`teleoperator_robot_grants`**. If grants exist, notifications and the request list for that robot are visible **only** to operators with a grant (table **`teleoperator_robot_grants`**, UI **`/ui/teleop-access.html`**); the same set may accept. Request context in **`payload`** (including **`metadata.situation_report`**, optional **`metadata.kyr_peaq_context`** for Peaq). Optional **Peaq claim**: with **`PEAQ_ENABLED`** and configured RPC/DID see [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md); the help response includes **`id`** and on success **`peaq_claim`**, otherwise poll **`GET /api/robots/{id}/peaq/claim?helpRequestId=`**. See also [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).
 - **Dataset HTTP proxy (operator → robot)**: with **`DATABASE_URL`**, prefix **`/api/teleop/robots/{robotId}/dataset/...`** — same teleoperator JWT and **same grant rules** as accepting a help request. Requests are **streamed** to the robot’s dataset HTTP server (default **`host:9191`**, or registry fields **`datasetHttpHost`** / **`datasetHttpPort`**). Details: [docs/RAID_APP_DATASET_PROXY_SPEC.md](docs/RAID_APP_DATASET_PROXY_SPEC.md).
 - **Fleet and mDNS**: **`ROBOT_FLEET_ENROLLMENT_SECRET`** for **`POST /api/robots/enroll`** (stable **`enrollmentKey`** on the robot); optional **`MDNS_ENABLED`** / **`MDNS_HOSTNAME`** — service advertised on LAN as **`<hostname>.local`** (see `config/env.example`). Push allowlist to robot: **`RAID_TO_ROBOT_SECRET`** and [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md).
 
@@ -64,7 +64,7 @@ The server listens on **`HOST`** / **`PORT`**. Default **`HOST=0.0.0.0`** is **n
 **PostgreSQL (compose):** port **5434** is bound to **`127.0.0.1`** on the host (local access only, not from the internet). User `x402`, password `x402`, database `x402raid`. For `npm run` on the host: `DATABASE_URL=...localhost:5434...`. The `app` container uses internal address `postgres:5432`. On startup, tables **`teleoperators`**, **`robots`**, **`help_requests`** (including **`peaq_claim`** JSONB for teleop Peaq), **`teleop_sessions`**, **`teleoperator_robot_grants`** (teleoperator↔robot ACL) are created.
 
 **Option C — systemd without Docker (sample unit)**  
-Template: [`deploy/x402-raid-app.service.example`](deploy/x402-raid-app.service.example) — copy to `/etc/systemd/system/`, adjust paths and `User=`, then `sudo systemctl enable --now x402-raid-app`.
+Template: [`deploy/task-router-x402.service.example`](deploy/task-router-x402.service.example) — copy to `/etc/systemd/system/`, adjust paths and `User=`, then `sudo systemctl enable --now task-router-x402`.
 
 ## Interfaces
 
@@ -121,9 +121,9 @@ Protected prefixes: static `/ui` (except login and shared styles) and `/api/admi
 | `TELEOP_ROSBRIDGE_CONNECT_TIMEOUT_MS` | Timeout for **one** attempt to open outbound WS to rosbridge (ms). |
 | `TELEOP_ROSBRIDGE_CONNECT_ATTEMPTS` | Attempts per wave with pause **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`** before failure (default **3**). |
 | `TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS` | Pause between attempts (ms), default **2000**. |
-| `TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS` | After rosbridge was up then dropped: how many full reconnect waves while the client WS to Raid is still open (default **3**). When exhausted — **1011** to client. |
+| `TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS` | After rosbridge was up then dropped: how many full reconnect waves while the client WS to Task Router is still open (default **3**). When exhausted — **1011** to client. |
 | `TELEOP_SESSION_END_GRACE_MS` | After operator disconnect from `/ws/teleop/session/...` or final rosbridge failure: wait this many **ms** before closing the **`teleop_sessions`** row (default **120000**). While open, reconnect with the same `sessionId` and JWT. **`0`** — close immediately (legacy). |
-| `TELEOP_FORWARD_OPERATOR_HEADERS` | `true` / `false` (default `true`; also `0`, `false`, `no`, `off`). Outbound WS **raid_app → rosbridge**: **`X-Teleoperator-Id`** and **`X-Teleoperator-Login`**. |
+| `TELEOP_FORWARD_OPERATOR_HEADERS` | `true` / `false` (default `true`; also `0`, `false`, `no`, `off`). Outbound WS **Task Router → rosbridge**: **`X-Teleoperator-Id`** and **`X-Teleoperator-Login`**. |
 | `TELEOP_FORWARD_OPERATOR_QUERY` | `true` / `false` (default `true`). Append query **`teleoperator_id`** / **`teleoperator_login`**. Set `false` if rosbridge/proxy breaks on `?…`. |
 | `TELEOP_DATASET_PROXY_TIMEOUT_MS` | Outbound HTTP timeout to robot dataset for **`/api/teleop/robots/.../dataset/...`** (ms, default **300000**). |
 | **`PEAQ_ENABLED`** | `true` / `1` / `yes` / `on` — enable **Peaq claim** for teleop help. Default in `config/env.example` is on for dev; set explicitly in prod. |
@@ -143,7 +143,7 @@ npm run peaq:onboard -- --dry-run
 PEAQ_ONBOARD_EVM_PRIVATE_KEY=0x... npm run peaq:onboard
 ```
 
-Stdout prints **`PEAQ_MACHINE_DID_NAME`** and **`PEAQ_MACHINE_EVM_ADDRESS`** — add to Raid `.env`. **`PEAQ_ONBOARD_EVM_PRIVATE_KEY`** is only for sending the tx; runtime Raid does not need a key for **`did.read`**. Export **`onboardPeaqMachine`** can later be called from robot registration code.
+Stdout prints **`PEAQ_MACHINE_DID_NAME`** and **`PEAQ_MACHINE_EVM_ADDRESS`** — add to Task Router `.env`. **`PEAQ_ONBOARD_EVM_PRIVATE_KEY`** is only for sending the tx; runtime Task Router does not need a key for **`did.read`**. Export **`onboardPeaqMachine`** can later be called from robot registration code.
 
 **AGNG faucet on docs.peaq.xyz (“Failed to fetch” / CORS):** the widget **POST**s to `dev-peaq-faucet-service.cisys.xyz`. If the origin times out, Cloudflare may return **524**; the error page lacks `Access-Control-Allow-Origin`, so the browser shows **CORS** — a side effect, not “wrong address”. Same machine without CORS: [`scripts/peaqFaucetRequest.js`](scripts/peaqFaucetRequest.js) — default timeout **180 s**:
 
@@ -162,7 +162,7 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | **`ROBOT_FLEET_ENROLLMENT_SECRET`** | Shared fleet secret: `Authorization: Bearer …` or **`X-Robot-Fleet-Secret`** on **`POST /api/robots/enroll`** and (with admin) mutating **`/api/robots/*`**. Without it enroll returns **503**. Wrong secret: **401** with **`Invalid or missing fleet credential`**. If enroll returns only **`{"error":"Unauthorized"}`** with DB enabled — upgrade the app (route ordering with teleoperator was fixed). |
 | **`RAID_TO_ROBOT_SECRET`** | Secret for HTTP **POST** to the robot’s **`operatorRegistryUrl`** (operator id push); see [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
 | **`MDNS_ENABLED`** | `true` / `1` / `yes` / `on` — enable mDNS (UDP 5353, multicast). |
-| **`MDNS_HOSTNAME`** | Instance name (default `raid-app`); on LAN usually **`<name>.local`**. On success logs show **`mDNS advertisement started`**; on error, LAN advertisement failed. In Docker **bridge** mode, multicast may not reach other hosts even if start succeeds — use **host network** for `app` or access by IP. |
+| **`MDNS_HOSTNAME`** | Instance name (default `task-router-x402`); on LAN usually **`<name>.local`**. On success logs show **`mDNS advertisement started`**; on error, LAN advertisement failed. In Docker **bridge** mode, multicast may not reach other hosts even if start succeeds — use **host network** for `app` or access by IP. |
 
 ## API (short)
 
@@ -172,7 +172,7 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | ------ | ---- | ----------- |
 | `GET` | `/health` | Service status, robot count, x402 flag, **`teleoperatorEnabled`**, **`teleopWs`**, **`teleopGrantSignerPublicKey`** (Solana base58 SessionGrant signer when **`TELEOP_GRANT_SIGNING_SECRET_KEY`** set, else `null`) |
 | `GET` | `/api/robots` | Public robot list **without** `teleopSecret`. Persistence as above. |
-| `POST` | `/api/robots/enroll` | Fleet self-registration: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` or **`X-Robot-Fleet-Secret`**), body with **`enrollmentKey`**, `host`, `port`, optional `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (dataset proxy; Raid default port **9191** if unset). Idempotent upsert; response includes `teleopSecret`. Expected errors: **503** (fleet secret not configured), **401** mentioning **fleet credential**. |
+| `POST` | `/api/robots/enroll` | Fleet self-registration: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` or **`X-Robot-Fleet-Secret`**), body with **`enrollmentKey`**, `host`, `port`, optional `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (dataset proxy; default port **9191** if unset). Idempotent upsert; response includes `teleopSecret`. Expected errors: **503** (fleet secret not configured), **401** mentioning **fleet credential**. |
 | `POST` | `/api/robots` | New registration (new UUID): fleet secret **or** admin session. Full response with `teleopSecret`. |
 | `PUT` / `DELETE` | `/api/robots/{id}` | Update / delete — fleet secret **or** admin. |
 | `POST` | `/api/robots/{id}/refresh` | Health check — fleet secret **or** admin. |
@@ -234,23 +234,23 @@ Changes in third-party repos are out of scope; below is the integration contract
 4. **WebSocket (instead of `ws://<robot>:9090`)**:
    - `ws(s)://<host>:<port>/ws/teleop/session/<sessionId>?token=<URL-encoded JWT>`
    - After connect, send the **same JSON text frames** as direct ROSBridge WebSocket (e.g. `op: subscribe`, `op: publish`).
-5. **What the robot sees:** from `raid_app` host to `ws://rosbridgeHost:rosbridgePort` a **second** WebSocket runs (server → rosbridge). By default **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** and query **`teleoperator_id`** / **`teleoperator_login`** are attached for logging/proxy on the robot. Disable with **`TELEOP_FORWARD_OPERATOR_*`**. Stock rosbridge may ignore these.
-6. Max frame size: `TELEOP_MAX_MESSAGE_BYTES`. Operator JWT lifetime: **`TELEOPERATOR_JWT_EXPIRES_IN`**. Teleop session row stays open **`TELEOP_SESSION_END_GRACE_MS`** after WS drop, then closes (reconnect with same URL while grace and JWT hold). Reconnect **raid_app → rosbridge**: **`TELEOP_ROSBRIDGE_*_ATTEMPTS`**, **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**. Code **1011** / reason **`Rosbridge error`** usually means Raid cannot keep WS to **`rosbridgeHost:rosbridgePort`** (network, rosbridge down, proxy strips headers/query — try **`TELEOP_FORWARD_OPERATOR_*`**).
-7. **Dataset over HTTP (Quest / web without LAN to robot):** base URL **`https://<raid>/api/teleop/robots/<robotUuid>/dataset`** — same paths as on the robot. Same JWT; grants apply. Upstream timeout: **`TELEOP_DATASET_PROXY_TIMEOUT_MS`**.
+5. **What the robot sees:** from the Task Router host to `ws://rosbridgeHost:rosbridgePort` a **second** WebSocket runs (server → rosbridge). By default **`X-Teleoperator-Id`** / **`X-Teleoperator-Login`** and query **`teleoperator_id`** / **`teleoperator_login`** are attached for logging/proxy on the robot. Disable with **`TELEOP_FORWARD_OPERATOR_*`**. Stock rosbridge may ignore these.
+6. Max frame size: `TELEOP_MAX_MESSAGE_BYTES`. Operator JWT lifetime: **`TELEOPERATOR_JWT_EXPIRES_IN`**. Teleop session row stays open **`TELEOP_SESSION_END_GRACE_MS`** after WS drop, then closes (reconnect with same URL while grace and JWT hold). Reconnect **Task Router → rosbridge**: **`TELEOP_ROSBRIDGE_*_ATTEMPTS`**, **`TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS`**. Code **1011** / reason **`Rosbridge error`** usually means Task Router cannot keep WS to **`rosbridgeHost:rosbridgePort`** (network, rosbridge down, proxy strips headers/query — try **`TELEOP_FORWARD_OPERATOR_*`**).
+7. **Dataset over HTTP (Quest / web without LAN to robot):** base URL **`https://<task-router-host>/api/teleop/robots/<robotUuid>/dataset`** — same paths as on the robot. Same JWT; grants apply. Upstream timeout: **`TELEOP_DATASET_PROXY_TIMEOUT_MS`**.
 
 Robot HTTP “request help” (no operator JWT): [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md).
 
 #### Paying the teleoperator in SOL (full x402 cycle on robot)
 
-Raid **does not** spend server SOL for operator work: it issues a **signed SessionGrant** with **`operator_pubkey`** (wallet from DB at registration). **SOL transfer** is done by the **robot** after KYR session end (service **`/x402/complete_teleop_payment`**, same stack as x402 purchases) if enabled on the robot.
+Task Router **does not** spend server SOL for operator work: it issues a **signed SessionGrant** with **`operator_pubkey`** (wallet from DB at registration). **SOL transfer** is done by the **robot** after KYR session end (service **`/x402/complete_teleop_payment`**, same stack as x402 purchases) if enabled on the robot.
 
-**On Raid before testing:**
+**Before testing on Task Router:**
 
 1. In **`.env`**: **`TELEOP_GRANT_SIGNING_SECRET_KEY`** (Solana secret, same format as **`X402_SOLANA_SECRET_KEY`**). Without it **`GET …/teleop/session-grant`** returns **`grant_unconfigured`**.
 2. Teleoperator has **`wallet_public_key`** in DB (from registration). Otherwise after accept — **`grant_absent`**.
 3. **`GET /health`** → **`teleopGrantSignerPublicKey`**: add this base58 pubkey to robot KYR **`trusted_raid_keys`** ([docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md)).
-4. Flow: robot **`POST …/teleop/help`** → operator **`accept`** → robot polls **`GET …/teleop/session-grant?helpRequestId=`** (help response may include **`teleopGrantPollUrl`**) → before KYR **`open_session`**, pass **`teleopGrantPayload`** / **`teleopGrantSignature`** from Raid → on session end pay **`operator_pubkey`**.
-5. If robot logs show **`pending_from_raid`** / no on-chain transfer: often KYR opened session **before** receiving the grant from Raid or **does not trust** the signature — compare **`teleopGrantSignerPublicKey`** from **`GET …/session-grant`** or **`GET /health`** with **`trusted_raid_keys`** on the robot. See [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md §7](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
+4. Flow: robot **`POST …/teleop/help`** → operator **`accept`** → robot polls **`GET …/teleop/session-grant?helpRequestId=`** (help response may include **`teleopGrantPollUrl`**) → before KYR **`open_session`**, pass **`teleopGrantPayload`** / **`teleopGrantSignature`** from Task Router → on session end pay **`operator_pubkey`**.
+5. If robot logs show **`pending_from_raid`** / no on-chain transfer: often KYR opened session **before** receiving the grant from Task Router or **does not trust** the signature — compare **`teleopGrantSignerPublicKey`** from **`GET …/session-grant`** or **`GET /health`** with **`trusted_raid_keys`** on the robot. See [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md §7](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
 
 Full request/response details: **Swagger** (`/docs`). In-app x402 details: [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md).
 
@@ -258,9 +258,9 @@ Full request/response details: **Swagger** (`/docs`). In-app x402 details: [docs
 
 - `GET /health` or `/helth` → `{ status, message?, availableMethods?, location? }`.
 - `POST /commands/dance`, `POST /commands/buy-cola` with bodies per command.
-- For paid endpoints — **402** in V2 shape (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`). For **`any_teleop`** (ROS_X402_PAY) expect HTTP **`POST`** on e.g. **`/x402/any_teleop`** with the same **402** contract; client UI may call **`any_teleop`** via **`/api/client/invoice`** (Raid proxies to **`ANY_TELEOP_HTTP_PATH`**).
-- Teleop: robot exposes **ROSBridge WebSocket** (often port **9090**) on the same LAN Raid uses for `rosbridgeHost` / `rosbridgePort`. A script may call **`POST /api/robots/{robotId}/teleop/help`** with the secret set at robot registration ([docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md)). After accept, outbound rosbridge connection carries **operator id/login** (see **`TELEOP_FORWARD_*`**) — handle in robot proxy if needed.
-- Dataset upload from operator client: Raid must reach **`datasetHttpHost` / `datasetHttpPort`** on LAN (default **`host`** and **9191**). Operators call only Raid (**`/api/teleop/robots/{id}/dataset/...`**), not the robot directly from the internet.
+- For paid endpoints — **402** in V2 shape (`accepts[0].extra.reference`, `payTo`, `amount`, `asset`). For **`any_teleop`** (ROS_X402_PAY) expect HTTP **`POST`** on e.g. **`/x402/any_teleop`** with the same **402** contract; client UI may call **`any_teleop`** via **`/api/client/invoice`** (this service proxies to **`ANY_TELEOP_HTTP_PATH`**).
+- Teleop: robot exposes **ROSBridge WebSocket** (often port **9090**) on the same LAN Task Router uses for `rosbridgeHost` / `rosbridgePort`. A script may call **`POST /api/robots/{robotId}/teleop/help`** with the secret set at robot registration ([docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md)). After accept, outbound rosbridge connection carries **operator id/login** (see **`TELEOP_FORWARD_*`**) — handle in robot proxy if needed.
+- Dataset upload from operator client: Task Router must reach **`datasetHttpHost` / `datasetHttpPort`** on LAN (default **`host`** and **9191**). Operators call only Task Router (**`/api/teleop/robots/{id}/dataset/...`**), not the robot directly from the internet.
 
 Example `availableMethods` objects appear in older README revisions or in `swagger.js` (`RobotHealthStatus`).
 
@@ -300,7 +300,7 @@ npm test
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` from the robot (`teleop_fetch`) and WS/rosbridge.
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — **`payload.metadata.situation_report`** for VR/operator UI.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
-- [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — robot dev: RAID → KYR call order, SessionGrant, `trusted_raid_keys`, fixing `pending_from_raid` and missing operator payment.
+- [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — robot dev: Task Router → KYR call order, SessionGrant, `trusted_raid_keys`, fixing `pending_from_raid` and missing operator payment.
 - [docs/SPRINT_SEMAPHORE_X402_RAID_APP.md](docs/SPRINT_SEMAPHORE_X402_RAID_APP.md) — sprint semaphore / test alignment (receipts/incidents/KYR stats vs this repo’s scope).
 
 ## Public repository and secrets

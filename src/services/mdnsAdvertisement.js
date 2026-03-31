@@ -17,8 +17,8 @@ function startMdnsAdvertisement(opts) {
     // CJS: package exports { Bonjour, default }; `require()` is not the class itself.
     const { Bonjour: BonjourClass } = require('bonjour-service');
     bonjour = new BonjourClass();
-    const rawName = (mdns.hostname || 'raid-app').trim() || 'raid-app';
-    const name = rawName.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 63) || 'raid-app';
+    const rawName = (mdns.hostname || 'task-router-x402').trim() || 'task-router-x402';
+    const name = rawName.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 63) || 'task-router-x402';
     service = bonjour.publish({
       name,
       type: 'http',

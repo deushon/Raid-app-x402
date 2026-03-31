@@ -205,7 +205,7 @@ const loadConfig = (argv = []) => {
         const t = String(v).trim();
         return t || null;
       })(),
-      /** Optional: RAID authenticates to robot operator-registry HTTP API (see docs/ROBOT_OPERATOR_SYNC.md) */
+      /** Optional: Task Router authenticates to robot operator-registry HTTP API (see docs/ROBOT_OPERATOR_SYNC.md) */
       raidToRobotSecret: (() => {
         const v = process.env.RAID_TO_ROBOT_SECRET;
         if (v === undefined || v === null) return null;
@@ -216,7 +216,7 @@ const loadConfig = (argv = []) => {
     mdns: {
       enabled: parseEnvBool(process.env.MDNS_ENABLED, false),
       /** mDNS instance name → other hosts resolve as `<name>.local` (bonjour-service) */
-      hostname: (process.env.MDNS_HOSTNAME || 'raid-app').trim() || 'raid-app',
+      hostname: (process.env.MDNS_HOSTNAME || 'task-router-x402').trim() || 'task-router-x402',
     },
     database: {
       url: process.env.DATABASE_URL || null,
@@ -241,7 +241,7 @@ const loadConfig = (argv = []) => {
       rosbridgeReconnectDelayMs: toNumber(process.env.TELEOP_ROSBRIDGE_RECONNECT_DELAY_MS, 2000),
       /**
        * After a rosbridge connection drops — how many times the server repeats the connect cycle
-       * (rosbridgeConnectAttempts attempts with delay) while the client WS to Raid stays open.
+       * (rosbridgeConnectAttempts attempts with delay) while the client WS to Task Router stays open.
        */
       rosbridgeDropReconnectAttempts: toNumber(process.env.TELEOP_ROSBRIDGE_DROP_RECONNECT_ATTEMPTS, 3),
       /**

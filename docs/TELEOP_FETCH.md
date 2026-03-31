@@ -1,6 +1,6 @@
-# Robot integration with `raid_app` (`teleop_fetch` role)
+# Robot integration with Task-router-x402 (`teleop_fetch` role)
 
-This document describes the **HTTP call from the robot** to Raid App (informal name **`teleop_fetch`**: script, ROS node, systemd, etc.) and **what the robot sees** after an operator accepts and the ROSBridge proxy is active.
+This document describes the **HTTP call from the robot** to **Task-router-x402** (informal name **`teleop_fetch`**: script, ROS node, systemd, etc.) and **what the robot sees** after an operator accepts and the ROSBridge proxy is active.
 
 See also: [README.md](../README.md) (`TELEOP_*` table, Docker, health), [ROBOT_SIDE_AI_AGENT.md](./ROBOT_SIDE_AI_AGENT.md) (checklist for robot-side code), source [`src/routes/teleopHelp.js`](../src/routes/teleopHelp.js), [`src/ws/teleopServer.js`](../src/ws/teleopServer.js).
 
@@ -8,13 +8,13 @@ See also: [README.md](../README.md) (`TELEOP_*` table, Docker, health), [ROBOT_S
 
 ## What `teleop_fetch` does
 
-Usually **one action**: tell `raid_app` the robot needs help — **`POST /api/robots/{robotId}/teleop/help`**.
+Usually **one action**: tell Task-router-x402 the robot needs help — **`POST /api/robots/{robotId}/teleop/help`**.
 
 This call **does not** need teleoperator JWT, cookies, or WebSocket; the operator and VR use those **after** accept.
 
 ---
 
-## Requirements on `raid_app`
+## Requirements on Task-router-x402
 
 Without these the help route is **not mounted** (requests to `/api/robots/.../teleop/help` are not handled as teleop):
 
@@ -30,13 +30,13 @@ Recommended path: call **`POST /api/robots/enroll`** once (and when IP/host chan
 
 | Parameter | Value |
 |-----------|-------|
-| **URL** | `http(s)://<RAID_HOST>:<PORT>/api/robots/enroll` |
+| **URL** | `http(s)://<TASK_ROUTER_HOST>:<PORT>/api/robots/enroll` |
 | **Fleet auth** | **`X-Robot-Fleet-Secret: <ROBOT_FLEET_ENROLLMENT_SECRET>`** or **`Authorization: Bearer <same secret>`** |
 | **Body (JSON)** | Required **`enrollmentKey`**, **`host`**, **`port`**; optional **`name`**, **`rosbridgeHost`**, **`rosbridgePort`**, **`teleopSecret`** (server generates if omitted), **`operatorRegistryUrl`** (allowlist push, see [ROBOT_OPERATOR_SYNC.md](./ROBOT_OPERATOR_SYNC.md)) |
 
 Response: full robot object including **`id`** (store as **`robotId`**) and **`teleopSecret`**. Repeat with the same **`enrollmentKey`** updates the row (same **`id`**).
 
-**Discovering `RAID_HOST`:** e.g. **`http://raid-app.local:3000`** when mDNS is enabled on the server (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, see README).
+**Discovering `TASK_ROUTER_HOST`:** e.g. **`http://task-router-x402.local:3000`** when mDNS is enabled on the server (**`MDNS_ENABLED`**, **`MDNS_HOSTNAME`**, see README).
 
 ---
 
@@ -68,7 +68,7 @@ After **201/200** a **`help_request`** event is sent on **`/ws/teleoperator?toke
 
 ```bash
 curl -sS -X POST \
-  "http://RAID_HOST:3000/api/robots/ROBOT_UUID/teleop/help" \
+  "http://TASK_ROUTER_HOST:3000/api/robots/ROBOT_UUID/teleop/help" \
   -H "Content-Type: application/json" \
   -H "X-Robot-Teleop-Secret: your-shared-secret" \
   -d '{"message":"Need assistance","metadata":{"task_id":"run-1","error_context":"","situation_report":"Near door; navigation stalled.","battery":12}}'
@@ -80,11 +80,11 @@ There is **no** minimum length in code: empty string means “teleop disabled”
 
 ---
 
-## Operator identity on the robot (outbound WS `raid_app` → rosbridge)
+## Operator identity on the robot (outbound WS Task Router → rosbridge)
 
 This is **not** part of `teleop_fetch`: it applies **after** the operator calls **`POST /api/teleoperator/help-requests/{id}/accept`** and connects to **`/ws/teleop/session/{sessionId}?token=…`**.
 
-Then **Raid App** opens its **own** client WebSocket to **`ws://rosbridgeHost:rosbridgePort`** (robot card fields; default `rosbridgeHost = host`, port **9090**).
+Then **Task-router-x402** opens its **own** client WebSocket to **`ws://rosbridgeHost:rosbridgePort`** (robot card fields; default `rosbridgeHost = host`, port **9090**).
 
 **The JWT is not sent to the robot.** Only **stable profile fields**:
 
@@ -103,7 +103,7 @@ ws://192.168.1.10:9090?teleoperator_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890&tele
 
 **Stock rosbridge** may **ignore** these headers and query. They are usually read by **nginx / another proxy** in front of rosbridge or a custom wrapper.
 
-### Disabling forwarding (Raid side only)
+### Disabling forwarding (Task Router side only)
 
 | Variable | Default | If `false` / `0` / `no` / `off` |
 |----------|---------|--------------------------------|
@@ -118,7 +118,7 @@ Empty env values keep **defaults** (enabled). Implementation: **`buildRosbridgeW
 
 ## Network and security
 
-- Robot and `raid_app` must reach each other (often **LAN** for HTTP `teleop/help` and outbound WS to rosbridge).
+- Robot and Task-router-x402 must reach each other (often **LAN** for HTTP `teleop/help` and outbound WS to rosbridge).
 - Do not log full `teleopSecret`.
 - CORS allows **`X-Robot-Teleop-Secret`** and **`X-Robot-Fleet-Secret`** for browsers; typical `teleop_fetch` on the robot is **server-to-server**, no CORS.
 
@@ -126,7 +126,7 @@ Empty env values keep **defaults** (enabled). Implementation: **`buildRosbridgeW
 
 ## Do you need to change `teleop_fetch` code
 
-Change **only if** the **POST …/teleop/help** contract is wrong (URL, method, secret header, robot UUID). Forwarding **`teleoperator_*`** is configured on **Raid App** and on the robot **proxy/rosbridge stack**; `teleop_fetch` usually needs **no** extra logic for that.
+Change **only if** the **POST …/teleop/help** contract is wrong (URL, method, secret header, robot UUID). Forwarding **`teleoperator_*`** is configured on **Task-router-x402** and on the robot **proxy/rosbridge stack**; `teleop_fetch` usually needs **no** extra logic for that.
 
 ---
 

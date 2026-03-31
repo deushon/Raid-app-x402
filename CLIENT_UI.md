@@ -1,4 +1,4 @@
-# Client UI for x402 Raid App
+# Client UI for Task-router-x402
 
 ## Overview
 
@@ -17,7 +17,7 @@ Public interface for external users with Solana wallet payments and two operatio
 - Direct choice of robot and action
 - Full control over executor selection
 
-### RAID Mode
+### Task Router mode (API value `raid`)
 - Individual robots are hidden
 - System selects the best executor automatically
 - Uses AI agent for selection
@@ -49,7 +49,7 @@ All SOL-compatible wallets are supported:
 List available robots (Direct mode).
 
 ### GET `/api/client/commands`
-List available commands (RAID mode).
+List available commands (Task Router mode; API `mode`: `raid`).
 
 ### GET `/api/client/settings`
 Get RPC and client settings (no API key).

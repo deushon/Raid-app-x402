@@ -1,6 +1,6 @@
 # RAID App: HTTP reverse proxy for robot dataset API
 
-**Audience:** developers of `x402_raid_app` (Node.js).  
+**Audience:** developers of **Task-router-x402** (`task-router-x402`, Node.js).  
 **Purpose:** teleoperators reach the robot’s existing dataset REST server **only through RAID** (HTTPS, JWT). The robot implementation lives in `br-vr-dev-sinc` (`dataset_upload_server.py`); **do not duplicate** request/response schemas on RAID—**transparently proxy** HTTP.
 
 **Robot-side reference:** [`../scripts/dataset_upload_server.py`](../scripts/dataset_upload_server.py)

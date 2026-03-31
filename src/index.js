@@ -351,7 +351,7 @@ const bootstrap = async () => {
 
   let mdnsHandle = { stop: () => {} };
   const serverInstance = httpServer.listen(server.port, server.host, () => {
-    logger.info('x402 Raid App server started', {
+    logger.info('Task-router-x402 server started', {
       host: server.host,
       port: server.port,
       x402Configured: x402Service.isConfigured(),

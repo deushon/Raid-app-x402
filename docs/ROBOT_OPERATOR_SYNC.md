@@ -1,14 +1,14 @@
-# Robot operator allowlist sync (RAID → robot)
+# Robot operator allowlist sync (Task Router → robot)
 
-RAID can push the current list of **teleoperator UUIDs** that have an **active grant** for a given robot. This is optional: the robot must expose an HTTP endpoint and store **`operatorRegistryUrl`** on its RAID registry row (admin UI or API).
+Task-router-x402 can push the current list of **teleoperator UUIDs** that have an **active grant** for a given robot. This is optional: the robot must expose an HTTP endpoint and store **`operatorRegistryUrl`** on its Task Router registry row (admin UI or API).
 
-## Environment (RAID)
+## Environment (Task Router)
 
 | Variable | Purpose |
 | --- | --- |
-| **`RAID_TO_ROBOT_SECRET`** | Shared secret RAID sends to the robot so the robot can authenticate the caller. |
+| **`RAID_TO_ROBOT_SECRET`** | Shared secret Task Router sends to the robot so the robot can authenticate the caller. |
 
-## Request from RAID
+## Request from Task Router
 
 - **Method**: `POST`
 - **URL**: exact value of **`operatorRegistryUrl`** on the robot record (full URL, no path concatenation on the server).
@@ -24,7 +24,7 @@ RAID can push the current list of **teleoperator UUIDs** that have an **active g
 
 The list is derived from **`teleoperator_robot_grants`** (active rows only) for that robot.
 
-## Triggering sync from RAID
+## Triggering sync from Task Router
 
 - Admin UI: **Teleop access** page → **Push allowlist to robot**.
 - API: **`POST /api/admin/robots/{robotId}/sync-operator-allowlist`** (admin session or Basic Auth).
@@ -38,4 +38,4 @@ If `operatorRegistryUrl` is empty or `RAID_TO_ROBOT_SECRET` is unset, the API re
 3. Parse JSON and persist **`allowedTeleoperatorIds`** (e.g. file or in-memory for rosbridge/nginx auth).
 4. When a teleop session arrives (ROSBridge or HTTP proxy), allow only if the operator id (e.g. from **`X-Teleoperator-Id`**) is in the stored list.
 
-RAID already forwards operator identity to rosbridge; see [TELEOP_FETCH.md](./TELEOP_FETCH.md).
+Task Router already forwards operator identity to rosbridge; see [TELEOP_FETCH.md](./TELEOP_FETCH.md).

@@ -9,7 +9,7 @@ Summary: help requests now include structured context and **`situation_report`**
    - **`metadata.task_id`**, **`metadata.error_context`** — strings (`error_context` may be empty).
    - **`metadata.situation_report`** — optional long UTF-8 text: what the robot was doing, state, why an operator is needed.
 
-2. **RAID** always normalizes the request: **`payload`** contains **`message`** and **`metadata`** with the three string fields above. If the robot omits `situation_report` or all of `metadata`, missing values become **empty strings** `""`.
+2. **Task-router-x402** always normalizes the request: **`payload`** contains **`message`** and **`metadata`** with the three string fields above. If the robot omits `situation_report` or all of `metadata`, missing values become **empty strings** `""`.
 
 3. **`situation_report`** length on the server is capped at **65536** UTF-8 bytes; the tail is truncated without an error for the client.
 

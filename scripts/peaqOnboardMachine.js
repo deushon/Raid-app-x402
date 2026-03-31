@@ -15,7 +15,7 @@
  *   PEAQ_ONBOARD_MACHINE_NAME — optional; otherwise generated raid_m_<random hex>.
  *   PEAQ_HTTP_BASE_URL, PEAQ_WSS_BASE_URL — optional (Agung defaults from src/config.js).
  *
- * On success copy into Raid .env: PEAQ_MACHINE_DID_NAME, PEAQ_MACHINE_EVM_ADDRESS.
+ * On success copy into Task Router `.env`: PEAQ_MACHINE_DID_NAME, PEAQ_MACHINE_EVM_ADDRESS.
  */
 
 const crypto = require('crypto');
@@ -170,7 +170,7 @@ async function main() {
   console.log('  PEAQ_MACHINE_EVM_ADDRESS=', result.evmAddress);
   console.log('  tx hash:', result.txHash);
   console.log('');
-  console.log('Paste into RAID .env (with PEAQ_ENABLED=true).');
+  console.log('Paste into Task Router .env (with PEAQ_ENABLED=true).');
 
   try {
     const doc = await readDidSmokeTest({

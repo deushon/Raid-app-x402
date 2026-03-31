@@ -1,5 +1,5 @@
 {
-  "name": "x402_raid_app",
+  "name": "task-router-x402",
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {

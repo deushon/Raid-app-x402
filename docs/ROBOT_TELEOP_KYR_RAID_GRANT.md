@@ -1,7 +1,7 @@
 # Robot teleop integration with RAID: SessionGrant, KYR, and operator payment
 
 **Audience:** Robot software developer (`teleop_fetch`, `rospy_x402`, KYR, `EscalationManager`).  
-**RAID side:** `x402_raid_app` repository.  
+**Task Router side:** `task-router-x402` repository.  
 **Related:** [RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md), [TELEOP_FETCH.md](TELEOP_FETCH.md).
 
 ---

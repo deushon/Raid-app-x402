@@ -1,6 +1,6 @@
 # RAID App — `POST …/teleop/help` extension (`situation_report` field)
 
-**Audience:** RAID App developers (`x402_raid_app` or equivalent).  
+**Audience:** Task-router-x402 developers (`task-router-x402` or equivalent).  
 **On-robot source:** `rospy_x402` package, `EscalationManager._request_grant_from_raid` → HTTP `POST` to the URL below.
 
 ## Endpoint and headers (unchanged)
@@ -48,7 +48,7 @@ Service `rospy_x402/RequestHelp` (`/x402/request_help`): `situation_report` is m
 
 Robot documentation: [RAID_INTEGRATION.md](RAID_INTEGRATION.md).
 
-## Implementation in RAID App (`x402_raid_app`)
+## Implementation in Task-router-x402 (`task-router-x402`)
 
 - Parse/normalize: [`src/utils/teleopHelpPayload.js`](src/utils/teleopHelpPayload.js), route [`src/routes/teleopHelp.js`](src/routes/teleopHelp.js).
 - **`situation_report`**: stored in JSON **`payload`** on the DB row; returned from **`GET /api/teleoperator/help-requests`**, **`POST …/teleop/help`**, and WS event **`help_request`** (`data.payload`).

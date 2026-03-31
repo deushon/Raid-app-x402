@@ -1,4 +1,4 @@
-# Production-style image for x402 Raid App (API + static UI on one port).
+# Production-style image for Task-router-x402 (API + static UI on one port).
 FROM node:22-bookworm-slim
 
 WORKDIR /app

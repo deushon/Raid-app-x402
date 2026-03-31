@@ -1,4 +1,4 @@
-# AI agent instructions (x402 Raid App)
+# AI agent instructions (Task-router-x402)
 
 This file complements [README.md](README.md) for humans. It records **mandatory** rules for any changes in this repository (including from automated assistants).
 

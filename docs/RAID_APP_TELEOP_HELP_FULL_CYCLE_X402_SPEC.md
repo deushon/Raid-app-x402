@@ -1,6 +1,6 @@
 # RAID App — full teleop cycle: `teleop/help`, SessionGrant, operator wallet, post-session SOL payment (x402)
 
-**Audience:** RAID App team (`x402_raid_app` or equivalent), product and backend.  
+**Audience:** Task-router-x402 team (`task-router-x402` repository or equivalent), product and backend.  
 **Robot:** `rospy_x402` package (`EscalationManager`, `x402_ex_server` node).  
 **Robot developer (step order, KYR, `pending_from_raid`):** [ROBOT_TELEOP_KYR_RAID_GRANT.md](ROBOT_TELEOP_KYR_RAID_GRANT.md).  
 **Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (request body), [RAID_INTEGRATION.md](RAID_INTEGRATION.md), [../br-kyr/DOC/ROSBRIDGE_AND_RAID.md](../../br-kyr/DOC/ROSBRIDGE_AND_RAID.md).

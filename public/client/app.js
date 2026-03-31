@@ -110,7 +110,7 @@ function setMode(mode) {
 
   const descriptions = {
     direct: '<strong>Direct:</strong> Choose robot and action. Full control over executor.',
-    raid: '<strong>RAID:</strong> System selects the best executor. Individual robots are hidden.',
+    raid: '<strong>Task router:</strong> System selects the best executor. Individual robots are hidden.',
   };
   document.getElementById('mode-description').innerHTML = descriptions[mode];
 
