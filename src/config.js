@@ -70,6 +70,10 @@ const toNumber = (value, fallback) => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+/** Agung dev testnet defaults when `PEAQ_ENABLED` and RPC URLs omitted (docs/RAID_APP_PEAQ_CLAIM_SPEC.md). */
+const PEAQ_AGUNG_HTTP_DEFAULT = 'https://peaq-agung.api.onfinality.io/public';
+const PEAQ_AGUNG_WSS_DEFAULT = 'wss://wss-async.agung.peaq.network';
+
 /** @param {string|undefined|null} value @param {boolean} defaultValue */
 const parseEnvBool = (value, defaultValue) => {
   if (value === undefined || value === null || String(value).trim() === '') {
@@ -255,6 +259,38 @@ const loadConfig = (argv = []) => {
         300000,
       ),
     },
+    peaq: (() => {
+      const peaqEnabled = parseEnvBool(process.env.PEAQ_ENABLED, false);
+      const trimEnv = (key) => {
+        const v = process.env[key];
+        if (v === undefined || v === null) return null;
+        const t = String(v).trim();
+        return t || null;
+      };
+      let httpBaseUrl = trimEnv('PEAQ_HTTP_BASE_URL');
+      let wssBaseUrl = trimEnv('PEAQ_WSS_BASE_URL');
+      if (peaqEnabled) {
+        if (!httpBaseUrl) {
+          httpBaseUrl = PEAQ_AGUNG_HTTP_DEFAULT;
+        }
+        if (!wssBaseUrl) {
+          wssBaseUrl = PEAQ_AGUNG_WSS_DEFAULT;
+        }
+      }
+      return {
+        enabled: peaqEnabled,
+        httpBaseUrl,
+        wssBaseUrl,
+        machineDidName: trimEnv('PEAQ_MACHINE_DID_NAME'),
+        machineEvmAddress: trimEnv('PEAQ_MACHINE_EVM_ADDRESS'),
+        networkLabel: (() => {
+          const v = process.env.PEAQ_NETWORK;
+          const t = v != null ? String(v).trim() : '';
+          return t || 'peaq-agung';
+        })(),
+        claimSyncTimeoutMs: toNumber(process.env.PEAQ_CLAIM_SYNC_TIMEOUT_MS, 2500),
+      };
+    })(),
     admin: {
       username: (() => {
         const v = process.env.ADMIN_USERNAME;
