@@ -302,6 +302,7 @@ npm test
 
 ## Documentation index
 
+- [CHANGELOG.md](CHANGELOG.md) — summary of recent changes (use for PR descriptions).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — language policy, OpenAPI, tests, and commit expectations for this repo.
 - [docs/CLIENT_UI.md](docs/CLIENT_UI.md) — public `/client` UI: modes, wallet, API usage.
 - [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md) — x402 client flow and robot **402** retry.
