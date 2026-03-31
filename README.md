@@ -313,6 +313,16 @@ npm test
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — поле **`payload.metadata.situation_report`** для VR/операторского UI (список заявок и WS).
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — гайд для агента/разработчика **кода на роботе**: enroll, секреты, help, allowlist, rosbridge.
 - [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — для разработчика робота: порядок вызовов RAID → KYR, SessionGrant, `trusted_raid_keys`, устранение `pending_from_raid` и отсутствия оплаты оператору.
+- [docs/SPRINT_SEMAPHORE_X402_RAID_APP.md](docs/SPRINT_SEMAPHORE_X402_RAID_APP.md) — сверка семафоров/тестов спринта (receipts/incidents/KYR stats и т.д.) с границами **этого** репозитория.
+
+## Публичный репозиторий и секреты
+
+Перед пушем убедитесь, что в истории и индексе **нет** файлов с реальными ключами и паролями:
+
+- **`.env`** и варианты (`.env.local` и т.п.) — только локально; в репозитории остаётся **`config/env.example`** с плейсхолдерами.
+- **`config/client-settings.json`** — в `.gitignore`; при необходимости храните шаблон отдельно или документируйте поля в README без значений.
+- Не коммитьте **архивы** (`*.zip` и т.д.) со снимком репозитория или `node_modules` — они раздувают историю и легко тащат забытые секреты.
+- Проверка: `git ls-files | grep -Ei '\.(env|pem|key)$'` и просмотр `git diff --staged` на случайные строки API-ключей.
 
 ## Прочее
 
