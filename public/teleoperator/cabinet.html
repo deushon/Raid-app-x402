@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teleoperator — dashboard</title>
+    <link rel="stylesheet" href="/client/styles.css" />
+    <link rel="stylesheet" href="/teleoperator/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Dashboard</h1>
+      <p>Open help requests and teleop session URL</p>
+      <p><button type="button" id="logout-btn" class="btn-secondary">Log out</button></p>
+    </header>
+    <main>
+      <p id="session-hint" class="hint"></p>
+      <p id="help-error" class="form-error hidden"></p>
+      <section class="panel">
+        <h2>Help requests</h2>
+        <div id="help-list" class="help-list"></div>
+      </section>
+      <section class="panel">
+        <h2>Active session</h2>
+        <div id="session-box"></div>
+      </section>
+    </main>
+    <script src="/teleoperator/cabinet.js"></script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -159,7 +160,11 @@ const bootstrap = async () => {
 
   if (pool) {
     const teleoperatorPublicRoot = path.join(__dirname, '..', 'public', 'teleoperator');
-    const teleoperatorCabinetFile = path.join(__dirname, '..', 'private', 'teleoperator', 'cabinet.html');
+    const teleoperatorCabinetPrivate = path.join(__dirname, '..', 'private', 'teleoperator', 'cabinet.html');
+    const teleoperatorCabinetPublic = path.join(teleoperatorPublicRoot, 'cabinet.html');
+    const teleoperatorCabinetFile = fs.existsSync(teleoperatorCabinetPrivate)
+      ? teleoperatorCabinetPrivate
+      : teleoperatorCabinetPublic;
 
     app.get(
       '/teleoperator/cabinet',
