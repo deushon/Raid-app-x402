@@ -73,7 +73,7 @@ Template: [`deploy/task-router-x402.service.example`](deploy/task-router-x402.se
 | `/` | Redirect to `/client` |
 | `/client` | Public UI: RPC settings, robot/command list, direct/raid, payment and execution |
 | `/ui` | Admin: session via **`POST /api/admin/login`** (cookie) or redirect to `/ui/login.html`; `/api/admin/*` — cookie **or** HTTP Basic (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) |
-| `/ui/teleop-access.html` | Operators and robots, **grants** (who may accept teleop on which robot), allowlist sync to robot ([docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md)). “Add grant” lists operators from DB: at least one registration on **`/teleoperator`** is required first. |
+| `/ui/teleop-access.html` | **Grants**, push to robot (**allowlist** and/or **dataNodeSync**), per-robot **dataNodeSyncOverride** JSON ([docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md)). “Add grant” needs at least one **`/teleoperator`** registration. |
 | `/docs` | Swagger UI |
 | `/docs-json` | OpenAPI spec (JSON) |
 | `/teleoperator` | Teleoperator UI: register, login (only if `DATABASE_URL` is set) |
@@ -160,7 +160,9 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | Variable | Description |
 | -------- | ----------- |
 | **`ROBOT_FLEET_ENROLLMENT_SECRET`** | Shared fleet secret: `Authorization: Bearer …` or **`X-Robot-Fleet-Secret`** on **`POST /api/robots/enroll`** and (with admin) mutating **`/api/robots/*`**. Without it enroll returns **503**. Wrong secret: **401** with **`Invalid or missing fleet credential`**. If enroll returns only **`{"error":"Unauthorized"}`** with DB enabled — upgrade the app (route ordering with teleoperator was fixed). |
-| **`RAID_TO_ROBOT_SECRET`** | Secret for HTTP **POST** to the robot’s **`operatorRegistryUrl`** (operator id push); see [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
+| **`RAID_TO_ROBOT_SECRET`** | Secret for HTTP **POST** to the robot’s **`operatorRegistryUrl`** (allowlist + optional **`dataNodeSync`**); see [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
+| **`DATA_NODE_SYNC_BASE_URL`** | If set (and not disabled with **`DATA_NODE_SYNC_PROVISION_ENABLED=false`**), fleet **`dataNodeSync`** is built for enroll and admin sync. Optional: **`DATA_NODE_SYNC_BATCH_PATH`**, **`DATA_NODE_SYNC_ENABLED`**, **`DATA_NODE_SYNC_INTERVAL_SEC`**, **`DATA_NODE_SYNC_AUTH_HEADER_NAME`**, **`DATA_NODE_SYNC_AUTH_HEADER_VALUE`**, **`DATA_NODE_SYNC_INCLUDE_*`**. Per-robot merge: admin **`dataNodeSyncOverride`** on **`PUT /api/admin/robots/{id}`**. |
+| **`DATA_NODE_INCIDENT_RELAY_URL`** | With **`DATA_NODE_INCIDENT_RELAY_ENABLED=true`**, new help requests (non-duplicate) trigger a best-effort **POST** with help metadata. Optional **`DATA_NODE_INCIDENT_RELAY_METHOD`**, **`DATA_NODE_INCIDENT_RELAY_AUTH_HEADER`**, **`DATA_NODE_INCIDENT_RELAY_AUTH_VALUE`**. Failures do not block help. |
 | **`MDNS_ENABLED`** | `true` / `1` / `yes` / `on` — enable mDNS (UDP 5353, multicast). |
 | **`MDNS_HOSTNAME`** | Instance name (default **`raid-app`**, unchanged for **robot/LAN compatibility** — many stacks use `http://raid-app.local:<PORT>`). Override for a different `.local` name (e.g. `task-router-x402`). On success logs show **`mDNS advertisement started`**; on error, LAN advertisement failed. In Docker **bridge** mode, multicast may not reach other hosts even if start succeeds — use **host network** for `app` or access by IP. |
 
@@ -172,7 +174,7 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | ------ | ---- | ----------- |
 | `GET` | `/health` | Service status, robot count, x402 flag, **`teleoperatorEnabled`**, **`teleopWs`**, **`teleopGrantSignerPublicKey`** (Solana base58 SessionGrant signer when **`TELEOP_GRANT_SIGNING_SECRET_KEY`** set, else `null`) |
 | `GET` | `/api/robots` | Public robot list **without** `teleopSecret`. Persistence as above. |
-| `POST` | `/api/robots/enroll` | Fleet self-registration: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` or **`X-Robot-Fleet-Secret`**), body with **`enrollmentKey`**, `host`, `port`, optional `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (dataset proxy; default port **9191** if unset). Idempotent upsert; response includes `teleopSecret`. Expected errors: **503** (fleet secret not configured), **401** mentioning **fleet credential**. |
+| `POST` | `/api/robots/enroll` | Fleet self-registration: **`ROBOT_FLEET_ENROLLMENT_SECRET`** (`Authorization: Bearer` or **`X-Robot-Fleet-Secret`**), body with **`enrollmentKey`**, `host`, `port`, optional `teleopSecret`, `operatorRegistryUrl`, **`datasetHttpHost`**, **`datasetHttpPort`** (dataset proxy; default port **9191** if unset). Idempotent upsert; response includes **`teleopSecret`** and optional **`dataNodeSync`** when DATA_NODE fleet/per-robot provisioning is configured (never includes operator-only **`dataNodeSyncOverride`**). Expected errors: **503** (fleet secret not configured), **401** mentioning **fleet credential**. |
 | `POST` | `/api/robots` | New registration (new UUID): fleet secret **or** admin session. Full response with `teleopSecret`. |
 | `PUT` / `DELETE` | `/api/robots/{id}` | Update / delete — fleet secret **or** admin. |
 | `POST` | `/api/robots/{id}/refresh` | Health check — fleet secret **or** admin. |
@@ -207,7 +209,7 @@ Header and query identifiers are the teleoperator user **UUID** from PostgreSQL 
 | `GET` / `POST` | `/api/admin/client-settings` | View / save RPC (session or Basic) |
 | `GET` | `/api/admin/teleoperators` | Teleoperator list (public fields), for grants UI |
 | `GET` / `POST` / `DELETE` | `/api/admin/teleoperator-grants` … | Operator↔robot grants; **DELETE** `/api/admin/teleoperator-grants/{teleoperatorId}/{robotId}` — revoke |
-| `POST` | `/api/admin/robots/{id}/sync-operator-allowlist` | HTTP push allowlist to robot `operatorRegistryUrl` ([docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md)) |
+| `POST` | `/api/admin/robots/{id}/sync-operator-allowlist` | HTTP **POST** to robot **`operatorRegistryUrl`**: **`allowedTeleoperatorIds`** and/or **`dataNodeSync`** (optional JSON body **`pushAllowlist`**, **`pushDataNodeSync`**, both default **true**). [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md). |
 
 ### Teleoperator (no Basic Auth; session via `teleop_token` cookie)
 
@@ -313,7 +315,9 @@ npm test
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — **`payload.metadata.situation_report`** for VR/operator UI.
 - [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md) — **stable vs cosmetic** naming; what robots and KYR must not break on upgrade.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
-- [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — operator allowlist push to the robot (`RAID_TO_ROBOT_SECRET`, `X-Raid-To-Robot-Secret`).
+- [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — push **`allowedTeleoperatorIds`** and/or **`dataNodeSync`** to the robot (`RAID_TO_ROBOT_SECRET`, fleet env **`DATA_NODE_SYNC_*`**, per-robot **`dataNodeSyncOverride`**).
+- [docs/MERMAID_ARCHITECTURE.md](docs/MERMAID_ARCHITECTURE.md) — diagram: RAID, robot, DATA_NODE, teleop paths.
+- [docs/TASK_ROUTER_FULL_SINC/](docs/TASK_ROUTER_FULL_SINC/) — bundled specs for RAID / robot / DATA_NODE alignment (handoff snapshots).
 - [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — Task Router → KYR: SessionGrant, `trusted_raid_keys`, `pending_from_raid`, operator payment.
 - [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md) — full teleop + x402 + SessionGrant cycle.
 - [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md) — Peaq claim on help requests (Agung / dev).

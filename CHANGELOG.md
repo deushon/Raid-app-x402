@@ -4,6 +4,14 @@ All notable changes to this repository are documented here. Dates use UTC; entri
 
 ## [Unreleased] — week ending 2026-03-31
 
+### Added (2026-04-10)
+
+- **DATA_NODE provisioning (RAID → robot):** fleet **`DATA_NODE_SYNC_*`** env, per-robot **`data_node_sync_override`** (JSONB), merged **`dataNodeSync`** on **`POST /api/robots/enroll`** and fleet **POST/PUT/refresh** responses (operator-only fields stripped from device JSON). Admin **POST …/sync-operator-allowlist** accepts **`pushAllowlist`** / **`pushDataNodeSync`**; push body matches **TASK_ROUTER_FULL_SINC** / **ROBOT_OPERATOR_SYNC.md**.
+- **Optional help → DATA_NODE relay:** **`DATA_NODE_INCIDENT_RELAY_*`** best-effort POST on new help requests (non-duplicate); failures do not block help.
+- **Teleop help:** **`metadata`** is required (plain object, may be `{}`) per **RAID_APP_TELEOP_HELP_SPEC**.
+- **Docs / UI:** **`docs/MERMAID_ARCHITECTURE.md`**, **`docs/TASK_ROUTER_FULL_SINC/`** bundle; **`public/teleop-access.html`** — push mode checkboxes and per-robot override editor.
+- **Tests:** **`dataNodeSyncProvision`**, **`pushRobotProvisionToRobot`** HTTP mock coverage.
+
 ### Added
 
 - **Teleoperators:** registration, login, JWT session (cookie + `accessToken`), cabinet UI; PostgreSQL schema and repositories.

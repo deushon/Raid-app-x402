@@ -202,6 +202,7 @@ const bootstrap = async () => {
         peaqClaimService,
         peaqClaimSyncTimeoutMs: config.peaq.claimSyncTimeoutMs,
         teleopSessionGrantService,
+        config,
       }),
     );
   }

@@ -45,20 +45,59 @@
       </section>
 
       <section class="panel">
-        <h2>Push allowlist to robot</h2>
+        <h2>Push to robot (<code>operatorRegistryUrl</code>)</h2>
         <p class="panel-description">
-          Calls the robot’s <code>operatorRegistryUrl</code> with active operator IDs. Contract:
-          <code>docs/ROBOT_OPERATOR_SYNC.md</code> in the repo; OpenAPI tag <strong>Admin</strong> for
-          <code>POST /api/admin/robots/&#123;robotId&#125;/sync-operator-allowlist</code>.
+          Calls the robot with <code>X-Raid-To-Robot-Secret</code>. Body may include
+          <code>allowedTeleoperatorIds</code> and/or <code>dataNodeSync</code> per
+          <code>docs/ROBOT_OPERATOR_SYNC.md</code>.
         </p>
         <form id="sync-form">
           <label>
             Robot
             <select name="robotId" id="sync-robot" required></select>
           </label>
-          <button type="submit">Sync allowlist</button>
+          <label class="checkbox-row">
+            <input type="checkbox" name="pushAllowlist" id="sync-push-allow" checked />
+            Push operator allowlist
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" name="pushDataNodeSync" id="sync-push-dn" checked />
+            Push DATA_NODE sync (<code>dataNodeSync</code>)
+          </label>
+          <button type="submit">Push to robot</button>
         </form>
         <div id="sync-message" class="message"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Per-robot DATA_NODE override</h2>
+        <p class="panel-description">
+          Merges over fleet <code>DATA_NODE_SYNC_*</code> env. JSON object in camelCase (e.g.
+          <code>baseUrl</code>, <code>authHeaderValue</code>). Leave empty and click Clear to remove override.
+          <code>authHeaderValue</code> is shown as <code>[redacted]</code> after save; omit or send
+          <code>[redacted]</code> on update to keep the stored token.
+        </p>
+        <form id="override-form">
+          <label>
+            Robot
+            <select name="robotId" id="override-robot" required></select>
+          </label>
+          <label>
+            Override JSON
+            <textarea
+              name="json"
+              id="override-json"
+              rows="8"
+              class="mono-textarea"
+              placeholder='{"baseUrl":"https://data.example.com","authHeaderValue":"Bearer …"}'
+            ></textarea>
+          </label>
+          <div class="button-row">
+            <button type="submit">Save override</button>
+            <button type="button" id="override-clear">Clear override</button>
+          </div>
+        </form>
+        <div id="override-message" class="message"></div>
       </section>
     </main>
 
@@ -96,8 +135,14 @@
         revoke(tid, rid) {
           return this.request(`/api/admin/teleoperator-grants/${tid}/${rid}`, { method: 'DELETE' });
         },
-        syncRobot(robotId) {
-          return this.request(`/api/admin/robots/${robotId}/sync-operator-allowlist`, { method: 'POST' });
+        syncRobot(robotId, body) {
+          return this.request(`/api/admin/robots/${robotId}/sync-operator-allowlist`, {
+            method: 'POST',
+            body: body || {},
+          });
+        },
+        putRobot(robotId, body) {
+          return this.request(`/api/admin/robots/${robotId}`, { method: 'PUT', body });
         },
       };
 
@@ -106,20 +151,35 @@
         el.className = 'message' + (kind ? ' ' + kind : '');
       }
 
+      let robotsCache = [];
+
       async function loadSelects() {
         const [{ teleoperators }, { robots }] = await Promise.all([api.listOperators(), api.listRobots()]);
+        robotsCache = robots || [];
         const opSel = document.getElementById('grant-op');
         const rSel = document.getElementById('grant-robot');
         const syncSel = document.getElementById('sync-robot');
+        const overrideSel = document.getElementById('override-robot');
         const ops = teleoperators || [];
         opSel.innerHTML = ops.length
           ? ops.map((u) => `<option value="${u.id}">${u.login} (${u.id.slice(0, 8)}…)</option>`).join('')
           : '<option value="" disabled selected>No accounts yet — register at /teleoperator first</option>';
-        const robotOpts = (robots || [])
+        const robotOpts = robotsCache
           .map((r) => `<option value="${r.id}">${r.name} — ${r.host}:${r.port}</option>`)
           .join('');
         rSel.innerHTML = robotOpts;
         syncSel.innerHTML = robotOpts;
+        overrideSel.innerHTML = robotOpts;
+      }
+
+      function fillOverrideJsonForRobot(robotId) {
+        const ta = document.getElementById('override-json');
+        const r = robotsCache.find((x) => x.id === robotId);
+        if (!r || !r.dataNodeSyncOverride) {
+          ta.value = '';
+          return;
+        }
+        ta.value = JSON.stringify(r.dataNodeSyncOverride, null, 2);
       }
 
       async function renderGrants() {
@@ -178,9 +238,50 @@
         ev.preventDefault();
         const msg = document.getElementById('sync-message');
         const fd = new FormData(ev.target);
+        const pushAllowlist = document.getElementById('sync-push-allow').checked;
+        const pushDataNodeSync = document.getElementById('sync-push-dn').checked;
         try {
-          const res = await api.syncRobot(fd.get('robotId'));
+          const res = await api.syncRobot(fd.get('robotId'), { pushAllowlist, pushDataNodeSync });
           setMessage(msg, JSON.stringify(res), res.skipped ? '' : 'success');
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('override-robot').addEventListener('change', (ev) => {
+        fillOverrideJsonForRobot(ev.target.value);
+      });
+
+      document.getElementById('override-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const msg = document.getElementById('override-message');
+        const robotId = document.getElementById('override-robot').value;
+        const raw = document.getElementById('override-json').value.trim();
+        try {
+          let dataNodeSyncOverride = null;
+          if (raw !== '') {
+            dataNodeSyncOverride = JSON.parse(raw);
+            if (dataNodeSyncOverride === null || typeof dataNodeSyncOverride !== 'object' || Array.isArray(dataNodeSyncOverride)) {
+              throw new Error('Override must be a JSON object');
+            }
+          }
+          await api.putRobot(robotId, { dataNodeSyncOverride });
+          setMessage(msg, 'Saved', 'success');
+          await loadSelects();
+          fillOverrideJsonForRobot(robotId);
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('override-clear').addEventListener('click', async () => {
+        const msg = document.getElementById('override-message');
+        const robotId = document.getElementById('override-robot').value;
+        try {
+          await api.putRobot(robotId, { dataNodeSyncOverride: null });
+          document.getElementById('override-json').value = '';
+          setMessage(msg, 'Cleared', 'success');
+          await loadSelects();
         } catch (e) {
           setMessage(msg, e.message, 'error');
         }
@@ -194,11 +295,32 @@
       (async () => {
         try {
           await loadSelects();
+          const or = document.getElementById('override-robot');
+          if (or.value) fillOverrideJsonForRobot(or.value);
           await renderGrants();
         } catch (e) {
           document.getElementById('grants-list').innerHTML = `<p class="message error">${e.message}</p>`;
         }
       })();
     </script>
+    <style>
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.5rem 0;
+      }
+      .button-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+      }
+      .mono-textarea {
+        width: 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+      }
+    </style>
   </body>
 </html>

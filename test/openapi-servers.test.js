@@ -15,6 +15,7 @@ test('OpenAPI defines RobotTeleopHelpRequest with situation_report and DATA_NODE
   const schema = swaggerSpec.components.schemas.RobotTeleopHelpRequest;
   assert.ok(schema);
   assert.ok(schema.required.includes('message'));
+  assert.ok(schema.required.includes('metadata'));
   assert.ok(schema.properties.metadata.properties.situation_report);
   assert.ok(schema.properties.metadata.properties.dataset_id);
   assert.ok(schema.properties.metadata.properties.kyr_session_id);

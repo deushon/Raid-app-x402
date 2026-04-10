@@ -1,5 +1,7 @@
 const express = require('express');
 const { createRequireFleetOrAdmin, createRequireFleetEnrollment } = require('../middleware/robotFleetAuth');
+const { buildDataNodeSyncFromRobot } = require('../services/dataNodeSyncProvision');
+const { omitOperatorProvisioningFields } = require('../services/robotRepository');
 
 /**
  * @param {{ registry: object, config: object, adminConfig: object }} deps
@@ -106,7 +108,13 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
       } catch (e) {
         /* non-fatal */
       }
-      return res.status(200).json(registry.getById(robot.id));
+      const full = registry.getById(robot.id);
+      const payload = { ...omitOperatorProvisioningFields(full) };
+      const dataNodeSync = buildDataNodeSyncFromRobot(full, config);
+      if (dataNodeSync != null) {
+        payload.dataNodeSync = dataNodeSync;
+      }
+      return res.status(200).json(payload);
     } catch (error) {
       if (error.message === 'enrollmentKey is required') {
         return res.status(400).json({ error: error.message });
@@ -173,7 +181,12 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
         datasetHttpHost,
         datasetHttpPort,
       });
-      return res.status(201).json(robot);
+      const out = { ...omitOperatorProvisioningFields(robot) };
+      const dns = buildDataNodeSyncFromRobot(robot, config);
+      if (dns != null) {
+        out.dataNodeSync = dns;
+      }
+      return res.status(201).json(out);
     } catch (error) {
       return next(error);
     }
@@ -197,7 +210,12 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
       const { robotId } = req.params;
       const updates = req.body;
       const robot = await registry.updateRobot(robotId, updates);
-      return res.json(robot);
+      const out = { ...omitOperatorProvisioningFields(robot) };
+      const dns = buildDataNodeSyncFromRobot(robot, config);
+      if (dns != null) {
+        out.dataNodeSync = dns;
+      }
+      return res.json(out);
     } catch (error) {
       if (error.message === 'Robot not found') {
         return res.status(404).json({ error: 'Robot not found' });
@@ -249,7 +267,12 @@ const createRobotsRouter = ({ registry, config, adminConfig }) => {
     try {
       const { robotId } = req.params;
       const robot = await registry.refreshRobot(robotId);
-      return res.json(robot);
+      const out = { ...omitOperatorProvisioningFields(robot) };
+      const dns = buildDataNodeSyncFromRobot(robot, config);
+      if (dns != null) {
+        out.dataNodeSync = dns;
+      }
+      return res.json(out);
     } catch (error) {
       if (error.message === 'Robot not found') {
         return res.status(404).json({ error: 'Robot not found' });

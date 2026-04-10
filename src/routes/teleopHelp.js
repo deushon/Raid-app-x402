@@ -18,6 +18,7 @@ const {
   KyrPeaqContextTooLargeError,
   KyrPeaqContextInvalidError,
 } = require('../utils/teleopHelpPayload');
+const { relayHelpRequestToDataNode } = require('../services/dataNodeIncidentRelay');
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -76,6 +77,7 @@ function readRobotTeleopSecret(req) {
  * @param {{ isEnabled: () => boolean, buildClaim: (input: { helpRequestId: string, robotId: string }) => Promise<object>, buildFailureClaim?: (input: { helpRequestId: string, robotId: string, errorMessage?: string }) => object }|null} [deps.peaqClaimService]
  * @param {number} [deps.peaqClaimSyncTimeoutMs]
  * @param {ReturnType<import('../services/teleopSessionGrantService').createTeleopSessionGrantService>|null} [deps.teleopSessionGrantService]
+ * @param {object|null} [deps.config] - full app config (optional DATA_NODE incident relay)
  */
 function createTeleopHelpRouter({
   pool,
@@ -87,6 +89,7 @@ function createTeleopHelpRouter({
   peaqClaimService = null,
   peaqClaimSyncTimeoutMs = 2500,
   teleopSessionGrantService = null,
+  config = null,
 }) {
   const router = express.Router();
 
@@ -97,7 +100,7 @@ function createTeleopHelpRouter({
    *     tags:
    *       - Teleop
    *     summary: Robot requests operator assistance (LAN, shared secret)
-   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message`. `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `dataset_id`, `kyr_session_id`, `kyr_robot_id` for DATA_NODE correlation (strings, default empty; each truncated at ~1 KiB UTF-8); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). Legacy clients may omit `metadata`. If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **TELEOP_GRANT_SIGNING_SECRET_KEY** is set, response includes **`teleopGrantPollUrl`** (relative path) — after operator **accept**, `GET` that URL with the same robot secret to obtain **`teleopGrantPayload`** / **`teleopGrantSignature`** before KYR `open_session` (otherwise KYR keeps mock `operator_pubkey` / `pending_from_raid`). When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. If `did.read` fails, RAID stores a fallback claim with **raid_peaq_read_status=failed** (help request still succeeds). WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
+   *     description: Requires X-Robot-Teleop-Secret matching the value set when the robot was registered. Body must include string `message` and object `metadata` (may be `{}`). `metadata` is normalized — `task_id`, `error_context`, `situation_report` are strings (default empty); optional `dataset_id`, `kyr_session_id`, `kyr_robot_id` for DATA_NODE correlation (strings, default empty; each truncated at ~1 KiB UTF-8); optional `situation_report` is UTF-8 narrative, max ~64 KiB (truncated). Optional opaque object `metadata.kyr_peaq_context` for peaq (max 64 KiB JSON). If an open request already exists for this robot, returns that request with duplicate=true. Response includes top-level `id` (same as `helpRequest.id`) for claim polling. When **TELEOP_GRANT_SIGNING_SECRET_KEY** is set, response includes **`teleopGrantPollUrl`** (relative path) — after operator **accept**, `GET` that URL with the same robot secret to obtain **`teleopGrantPayload`** / **`teleopGrantSignature`** before KYR `open_session` (otherwise KYR keeps mock `operator_pubkey` / `pending_from_raid`). When **PEAQ_ENABLED** and RPC/DID env are set, the server may include `peaq_claim` inline (if `did.read` finishes within **PEAQ_CLAIM_SYNC_TIMEOUT_MS**); otherwise use **GET /api/robots/{robotId}/peaq/claim**. If `did.read` fails, RAID stores a fallback claim with **raid_peaq_read_status=failed** (help request still succeeds). WebSocket event `help_request` is sent only to teleoperators with an active grant for this robot when the robot has at least one grant; otherwise to all connected teleoperators.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -117,7 +120,7 @@ function createTeleopHelpRouter({
    *       201:
    *         description: New help request created (same body shape as 200).
    *       400:
-   *         description: Invalid JSON body (e.g. missing or non-string `message`, or invalid `kyr_peaq_context` type).
+   *         description: Invalid JSON body (e.g. missing `message`/`metadata`, non-string `message`, non-object `metadata`, or invalid `kyr_peaq_context` type).
    *       401:
    *         description: Missing or invalid robot secret.
    *       404:
@@ -144,12 +147,28 @@ function createTeleopHelpRouter({
       if (typeof body.message !== 'string') {
         return res.status(400).json({ error: 'message is required and must be a string' });
       }
+      if (
+        body.metadata === undefined
+        || body.metadata === null
+        || typeof body.metadata !== 'object'
+        || Array.isArray(body.metadata)
+      ) {
+        return res.status(400).json({ error: 'metadata is required and must be a plain object' });
+      }
       const payload = normalizeRobotTeleopHelpBody(body);
 
       const { row, duplicate } = await createHelpRequest(pool, {
         robotId,
         payload,
       });
+
+      if (!duplicate && config) {
+        void relayHelpRequestToDataNode(config, {
+          helpRequestId: row.id,
+          robotId,
+          payload,
+        });
+      }
 
       let peaq_claim = null;
       if (peaqClaimService && peaqClaimService.isEnabled()) {

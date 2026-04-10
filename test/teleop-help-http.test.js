@@ -170,7 +170,7 @@ run('teleop help HTTP', () => {
 
     await request(app)
       .post(`/api/robots/${robotId}/teleop/help`)
-      .send({ message: 'need help' })
+      .send({ message: 'need help', metadata: {} })
       .expect(401);
 
     await request(app)
@@ -179,10 +179,17 @@ run('teleop help HTTP', () => {
       .send({})
       .expect(400);
 
+    const badMeta = await request(app)
+      .post(`/api/robots/${robotId}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'x' })
+      .expect(400);
+    assert.match(String(badMeta.body.error || ''), /metadata/i);
+
     const resHelp = await request(app)
       .post(`/api/robots/${robotId}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'need help' })
+      .send({ message: 'need help', metadata: {} })
       .expect(201);
     assert.equal(resHelp.body.duplicate, false);
     const helpId = resHelp.body.helpRequest.id;
@@ -251,7 +258,7 @@ run('teleop help HTTP', () => {
     const h = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'open' })
+      .send({ message: 'open', metadata: {} })
       .expect(201);
     const nid = h.body.helpRequest.id;
     const g = await request(app)
@@ -271,12 +278,12 @@ run('teleop help HTTP', () => {
     const r1 = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'help' })
+      .send({ message: 'help', metadata: {} })
       .expect(201);
     const r2 = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'help again' })
+      .send({ message: 'help again', metadata: {} })
       .expect(200);
     assert.equal(r2.body.duplicate, true);
     assert.equal(r2.body.helpRequest.id, r1.body.helpRequest.id);
@@ -296,7 +303,7 @@ run('teleop help HTTP', () => {
     const h = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'help' })
+      .send({ message: 'help', metadata: {} })
       .expect(201);
 
     const w1 = Keypair.generate().publicKey.toBase58();
@@ -330,7 +337,7 @@ run('teleop help HTTP', () => {
     const h = await request(app)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'help' })
+      .send({ message: 'help', metadata: {} })
       .expect(201);
 
     const w1 = Keypair.generate().publicKey.toBase58();
@@ -392,12 +399,12 @@ run('teleop help HTTP', () => {
     await request(app)
       .post(`/api/robots/${rGranted.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'granted robot' })
+      .send({ message: 'granted robot', metadata: {} })
       .expect(201);
     const hOpen = await request(app)
       .post(`/api/robots/${rOpen.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'open robot' })
+      .send({ message: 'open robot', metadata: {} })
       .expect(201);
 
     const l1 = await a1.get('/api/teleoperator/help-requests').expect(200);
@@ -623,13 +630,14 @@ run('teleop help HTTP', () => {
         grantRepository,
         peaqClaimService: { isEnabled: () => false, buildClaim: async () => ({}) },
         peaqClaimSyncTimeoutMs: 2500,
+        config: null,
       }),
     );
 
     const h = await request(localApp)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'no peaq' })
+      .send({ message: 'no peaq', metadata: {} })
       .expect(201);
     assert.equal(h.body.peaq_claim, undefined);
 
@@ -691,13 +699,14 @@ run('teleop help HTTP', () => {
           buildFailureClaim: (input) => failSvc.buildFailureClaim(input),
         },
         peaqClaimSyncTimeoutMs: 30000,
+        config: null,
       }),
     );
 
     const resHelp = await request(localApp)
       .post(`/api/robots/${reg.id}/teleop/help`)
       .set('X-Robot-Teleop-Secret', teleopSecret)
-      .send({ message: 'm' })
+      .send({ message: 'm', metadata: {} })
       .expect(201);
     assert.equal(resHelp.body.peaq_claim.raid_peaq_read_status, 'failed');
     assert.match(String(resHelp.body.peaq_claim.raid_peaq_error || ''), /simulated failure/i);

@@ -153,6 +153,33 @@ const swaggerDefinition = {
             nullable: true,
             description: 'Optional dataset HTTP port (default 9191).',
           },
+          dataNodeSyncOverride: {
+            type: 'object',
+            nullable: true,
+            additionalProperties: true,
+            description:
+              'Per-robot merge layer for DATA_NODE batch provisioning (camelCase keys per docs/ROBOT_OPERATOR_SYNC.md). **authHeaderValue** is redacted in GET responses; send **[redacted]** or omit to keep stored token.',
+          },
+          dataNodeSync: {
+            type: 'object',
+            nullable: true,
+            readOnly: true,
+            description:
+              'Present on **POST /api/robots/enroll** when fleet/per-robot sync is configured; merged payload for the robot worker.',
+            properties: {
+              baseUrl: { type: 'string' },
+              batchPath: { type: 'string' },
+              enabled: { type: 'boolean' },
+              authHeaderName: { type: 'string' },
+              authHeaderValue: { type: 'string' },
+              intervalSec: { type: 'integer' },
+              raidRobotUuid: { type: 'string', format: 'uuid' },
+              includeDashboardEvents: { type: 'boolean' },
+              includeAuditEvents: { type: 'boolean' },
+              includeStateUsbSnapshot: { type: 'boolean' },
+              includeKyrIncidents: { type: 'boolean' },
+            },
+          },
           status: { $ref: '#/components/schemas/RobotHealthStatus' },
           lastHealthCheckAt: { type: 'string', format: 'date-time', nullable: true },
           location: {
@@ -188,9 +215,9 @@ const swaggerDefinition = {
       },
       RobotTeleopHelpRequest: {
         type: 'object',
-        required: ['message'],
+        required: ['message', 'metadata'],
         description:
-          'Robot help request. **`message`** is required. **`metadata`** SHOULD include **`task_id`** and **`error_context`** (strings; `error_context` may be empty). **`situation_report`** is optional UTF-8 context (robot state, recent actions, why help is needed); if omitted, the server stores an empty string. Optional **`dataset_id`**, **`kyr_session_id`**, **`kyr_robot_id`**: strings for DATA_NODE / fleet correlation (docs/RAID_APP_DATA_NODE_CORRELATION_SPEC.md); if omitted, stored as empty strings; long values truncated server-side (~1 KiB UTF-8 each). Optional **`kyr_peaq_context`**: opaque JSON object from KYR (max 64 KiB serialized); must be a plain object if present. Extra `metadata` properties are preserved. Max ~64 KiB UTF-8 for `situation_report` (server truncates). Legacy clients may omit `metadata` entirely (server supplies default empty strings for the standard keys).',
+          'Robot help request. **`message`** and **`metadata`** (plain object, may be `{}`) are required. **`metadata`** SHOULD include **`task_id`** and **`error_context`** (strings; `error_context` may be empty). **`situation_report`** is optional UTF-8 context; if omitted, stored as empty string. Optional **`dataset_id`**, **`kyr_session_id`**, **`kyr_robot_id`**: DATA_NODE correlation (docs/RAID_APP_DATA_NODE_CORRELATION_SPEC.md). Optional **`kyr_peaq_context`**: opaque object from KYR (max 64 KiB JSON). Extra `metadata` properties are preserved.',
         properties: {
           message: {
             type: 'string',
@@ -290,6 +317,23 @@ const swaggerDefinition = {
           },
         },
       },
+      SyncOperatorAllowlistRequest: {
+        type: 'object',
+        description:
+          'Optional body for **POST /api/admin/robots/{robotId}/sync-operator-allowlist**. Defaults both flags true. At least one must be true.',
+        properties: {
+          pushAllowlist: {
+            type: 'boolean',
+            default: true,
+            description: 'Include **allowedTeleoperatorIds** from teleoperator_robot_grants.',
+          },
+          pushDataNodeSync: {
+            type: 'boolean',
+            default: true,
+            description: 'Include **dataNodeSync** when fleet env and/or per-robot override yields a payload.',
+          },
+        },
+      },
       RegisterRobotRequest: {
         type: 'object',
         required: ['host', 'port'],
@@ -308,6 +352,12 @@ const swaggerDefinition = {
           datasetHttpHost: { type: 'string', description: 'Optional dataset HTTP host for teleop proxy.' },
           datasetHttpPort: { type: 'integer', description: 'Optional dataset HTTP port (default 9191).' },
           operatorRegistryUrl: { type: 'string', description: 'Optional; see docs/ROBOT_OPERATOR_SYNC.md' },
+          dataNodeSyncOverride: {
+            type: 'object',
+            nullable: true,
+            additionalProperties: true,
+            description: 'Optional per-robot DATA_NODE batch provisioning overrides.',
+          },
         },
       },
       DanceCommandRequest: {
