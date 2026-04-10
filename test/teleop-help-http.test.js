@@ -207,6 +207,9 @@ run('teleop help HTTP', () => {
     assert.equal(p.metadata.task_id, '');
     assert.equal(p.metadata.error_context, '');
     assert.equal(p.metadata.situation_report, '');
+    assert.equal(p.metadata.dataset_id, '');
+    assert.equal(p.metadata.kyr_session_id, '');
+    assert.equal(p.metadata.kyr_robot_id, '');
 
     const acc = await agent
       .post(`/api/teleoperator/help-requests/${helpId}/accept`)
@@ -442,6 +445,46 @@ run('teleop help HTTP', () => {
     assert.equal(p.metadata.task_id, 'sess-9');
     assert.equal(p.metadata.error_context, '{"n":1}');
     assert.equal(p.metadata.situation_report, sr);
+  });
+
+  test('help payload includes DATA_NODE correlation metadata for operator list', async () => {
+    await pool.query(
+      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65527,
+      teleopSecret,
+    });
+    await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({
+        message: 'Correlate me',
+        metadata: {
+          task_id: 't-ds',
+          error_context: '',
+          dataset_id: 'ds-abc',
+          kyr_session_id: 'kyr-sess-1',
+          kyr_robot_id: 'robot-string-7',
+        },
+      })
+      .expect(201);
+
+    const w = Keypair.generate().publicKey.toBase58();
+    const agent = request.agent(app);
+    await agent
+      .post('/api/teleoperator/register')
+      .send({ login: 'opdn', password: 'password12', walletPublicKey: w })
+      .expect(201);
+    const list = await agent.get('/api/teleoperator/help-requests').expect(200);
+    assert.equal(list.body.helpRequests.length, 1);
+    const p = list.body.helpRequests[0].payload;
+    assert.equal(p.metadata.dataset_id, 'ds-abc');
+    assert.equal(p.metadata.kyr_session_id, 'kyr-sess-1');
+    assert.equal(p.metadata.kyr_robot_id, 'robot-string-7');
   });
 
   test('grantRepository listActive exposes teleoperator_login (login_normalized)', async () => {

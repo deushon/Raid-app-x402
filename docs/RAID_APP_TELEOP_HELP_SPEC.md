@@ -56,3 +56,5 @@ Robot documentation: [RAID_INTEGRATION.md](RAID_INTEGRATION.md).
 - **`situation_report`**: stored in JSON **`payload`** on the DB row; returned from **`GET /api/teleoperator/help-requests`**, **`POST …/teleop/help`**, and WS event **`help_request`** (`data.payload`).
 - Length limit: **65536** UTF-8 bytes; overflow truncates on code-point boundary with a warning log.
 - For VR / Quest / Unity operator clients see [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).
+
+Optional **`metadata.dataset_id`**, **`kyr_session_id`**, and **`kyr_robot_id`** (DATA_NODE / fleet correlation) are documented in [RAID_APP_DATA_NODE_CORRELATION_SPEC.md](RAID_APP_DATA_NODE_CORRELATION_SPEC.md); the server normalizes them to strings and truncates each at **1024** UTF-8 bytes.

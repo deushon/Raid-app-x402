@@ -23,7 +23,7 @@ const swaggerDefinition = {
     {
       name: 'Teleop',
       description:
-        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. Body: required string **`message`**; **`metadata`** with **`task_id`**, **`error_context`**, optional **`situation_report`**, optional opaque **`kyr_peaq_context`** (max 64 KiB JSON; see **RobotTeleopHelpRequest**). Response includes top-level **`id`** (UUID of the help request) and optionally **`peaq_claim`** when **PEAQ_*** env is configured. If **`sdk.did.read`** fails, the service still returns **200/201** for help and stores a fallback **`peaq_claim`** with **`raid_peaq_read_status=failed`** (see **PeaqClaim**). **`GET /api/robots/{robotId}/peaq/claim?helpRequestId=`** with the same robot secret returns **`{ peaq_claim }`** when ready (including that fallback), or **404** `claim_not_ready` while the claim is still pending. **Signed KYR SessionGrant** (`teleopGrantPayload` + `teleopGrantSignature`, variant A) is issued **after** an operator accepts: poll **`GET /api/robots/{robotId}/teleop/session-grant?helpRequestId=`** when **`TELEOP_GRANT_SIGNING_SECRET_KEY`** is set; **`GET /health`** exposes **`teleopGrantSignerPublicKey`**. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
+        'Robots call `POST /api/robots/{robotId}/teleop/help` with **`X-Robot-Teleop-Secret`** (per-robot secret), not the operator JWT. Body: required string **`message`**; **`metadata`** with **`task_id`**, **`error_context`**, optional **`situation_report`**, optional **`dataset_id`**, **`kyr_session_id`**, **`kyr_robot_id`** (DATA_NODE correlation; see **RobotTeleopHelpRequest**), optional opaque **`kyr_peaq_context`** (max 64 KiB JSON). Response includes top-level **`id`** (UUID of the help request) and optionally **`peaq_claim`** when **PEAQ_*** env is configured. If **`sdk.did.read`** fails, the service still returns **200/201** for help and stores a fallback **`peaq_claim`** with **`raid_peaq_read_status=failed`** (see **PeaqClaim**). **`GET /api/robots/{robotId}/peaq/claim?helpRequestId=`** with the same robot secret returns **`{ peaq_claim }`** when ready (including that fallback), or **404** `claim_not_ready` while the claim is still pending. **Signed KYR SessionGrant** (`teleopGrantPayload` + `teleopGrantSignature`, variant A) is issued **after** an operator accepts: poll **`GET /api/robots/{robotId}/teleop/session-grant?helpRequestId=`** when **`TELEOP_GRANT_SIGNING_SECRET_KEY`** is set; **`GET /health`** exposes **`teleopGrantSignerPublicKey`**. **Operator JWT** is required for `GET /api/teleoperator/help-requests` and `POST /api/teleoperator/help-requests/{id}/accept`. **Dataset HTTP** from the operator to the robot is proxied at **`/api/teleop/robots/{robotId}/dataset/...`** (same JWT and the same grant rule as accepting help). If the robot has **at least one** active row in **`teleoperator_robot_grants`**, only granted operators see open help requests (HTTP list) and receive **`help_request`** on **`/ws/teleoperator`**; only they may accept or use the dataset proxy. If the robot has **no** active grants, any logged-in operator sees all open requests and gets WS events (backward compatible). WebSockets: same JWT as **`?token=`** on `/ws/teleoperator` and `/ws/teleop/session/{sessionId}`. JWT lifetime: tag **Teleoperator**.',
     },
     { name: 'Admin', description: 'Admin panel API: session cookie from POST /api/admin/login, or HTTP Basic (curl/scripts).' },
     {
@@ -190,7 +190,7 @@ const swaggerDefinition = {
         type: 'object',
         required: ['message'],
         description:
-          'Robot help request. **`message`** is required. **`metadata`** SHOULD include **`task_id`** and **`error_context`** (strings; `error_context` may be empty). **`situation_report`** is optional UTF-8 context (robot state, recent actions, why help is needed); if omitted, the server stores an empty string. Optional **`kyr_peaq_context`**: opaque JSON object from KYR (max 64 KiB serialized); must be a plain object if present. Extra `metadata` properties are preserved. Max ~64 KiB UTF-8 for `situation_report` (server truncates). Legacy clients may omit `metadata` entirely (server supplies default empty strings for the standard keys).',
+          'Robot help request. **`message`** is required. **`metadata`** SHOULD include **`task_id`** and **`error_context`** (strings; `error_context` may be empty). **`situation_report`** is optional UTF-8 context (robot state, recent actions, why help is needed); if omitted, the server stores an empty string. Optional **`dataset_id`**, **`kyr_session_id`**, **`kyr_robot_id`**: strings for DATA_NODE / fleet correlation (docs/RAID_APP_DATA_NODE_CORRELATION_SPEC.md); if omitted, stored as empty strings; long values truncated server-side (~1 KiB UTF-8 each). Optional **`kyr_peaq_context`**: opaque JSON object from KYR (max 64 KiB serialized); must be a plain object if present. Extra `metadata` properties are preserved. Max ~64 KiB UTF-8 for `situation_report` (server truncates). Legacy clients may omit `metadata` entirely (server supplies default empty strings for the standard keys).',
         properties: {
           message: {
             type: 'string',
@@ -215,6 +215,19 @@ const swaggerDefinition = {
               situation_report: {
                 type: 'string',
                 description: 'Free-text UTF-8 situation summary for the operator / VR UI.',
+              },
+              dataset_id: {
+                type: 'string',
+                description:
+                  'Optional active dataset / record id from the robot when recording overlaps help (DATA_NODE correlation).',
+              },
+              kyr_session_id: {
+                type: 'string',
+                description: 'Optional KYR open_session id during teleop (DATA_NODE correlation).',
+              },
+              kyr_robot_id: {
+                type: 'string',
+                description: 'Optional KYR string robot id (e.g. kyr_proxy ~robot_id) for DATA_NODE correlation.',
               },
               kyr_peaq_context: {
                 type: 'object',
