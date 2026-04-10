@@ -39,6 +39,7 @@ const { createTeleopOperatorHub } = require('./services/teleopOperatorHub');
 const { attachTeleopWebSockets } = require('./ws/teleopServer');
 const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
+const servicesRegistrationStore = require('./services/servicesRegistrationStore');
 const { startMdnsAdvertisement } = require('./services/mdnsAdvertisement');
 
 const bootstrap = async () => {
@@ -86,6 +87,7 @@ const bootstrap = async () => {
   }
 
   settingsStore.init(config);
+  servicesRegistrationStore.init(config);
 
   const x402Service = new X402Service(config.x402);
   const healthMonitor = createHealthMonitor({ config, x402Service });

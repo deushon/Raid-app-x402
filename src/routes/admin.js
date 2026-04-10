@@ -18,6 +18,8 @@ const {
   hasDataNodeSyncPayload,
 } = require('../services/dataNodeSyncProvision');
 const { redactRobotForAdminApi } = require('../services/robotRepository');
+const servicesRegistrationStore = require('../services/servicesRegistrationStore');
+const { registerAdminServicesRegistrationRoutes } = require('./adminServicesRegistration');
 
 const CONFIG_FILE = path.join(process.cwd(), 'config', 'ai-agent.json');
 
@@ -134,6 +136,8 @@ const createAdminRouter = ({
   });
 
   router.use(createAdminApiAuthMiddleware(adminConfig));
+
+  registerAdminServicesRegistrationRoutes(router, { config, registry });
 
   const grantRepository = pool ? createTeleoperatorRobotGrantRepository(pool) : null;
   const teleoperatorRepository =
@@ -279,7 +283,7 @@ const createAdminRouter = ({
       if (pushDataNodeSync && !hasDataNodeSyncPayload(robot, config)) {
         return res.status(400).json({
           error:
-            'dataNodeSync is not configured for this robot (set DATA_NODE_SYNC_* env and/or dataNodeSyncOverride)',
+            'dataNodeSync is not configured for this robot (set DATA_NODE_SYNC_* env, Services registration UI, and/or dataNodeSyncOverride)',
         });
       }
 
@@ -294,13 +298,13 @@ const createAdminRouter = ({
       if (pushDataNodeSync && dataNodeSync == null) {
         return res.status(400).json({
           error:
-            'dataNodeSync is not configured for this robot (set DATA_NODE_SYNC_* env and/or dataNodeSyncOverride)',
+            'dataNodeSync is not configured for this robot (set DATA_NODE_SYNC_* env, Services registration UI, and/or dataNodeSyncOverride)',
         });
       }
 
       const result = await pushRobotProvisionToRobot({
         robot,
-        raidToRobotSecret: config?.robots?.raidToRobotSecret ?? null,
+        raidToRobotSecret: servicesRegistrationStore.getEffectiveRaidToRobotSecret(config),
         allowedTeleoperatorIds,
         dataNodeSync,
         pushAllowlist,

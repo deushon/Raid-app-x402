@@ -1,5 +1,6 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const servicesRegistrationStore = require('./servicesRegistrationStore');
 
 /**
  * Best-effort relay of help request to DATA_NODE (DATA_NODE_INGEST §6, correlation spec §2–3).
@@ -9,7 +10,7 @@ const logger = require('../utils/logger');
  * @param {{ helpRequestId: string, robotId: string, payload: { message?: string, metadata?: object } }} input
  */
 async function relayHelpRequestToDataNode(config, input) {
-  const r = config?.dataNodeIncidentRelay;
+  const r = servicesRegistrationStore.getMergedIncidentRelay(config);
   if (!r?.enabled || !r.url) {
     return;
   }

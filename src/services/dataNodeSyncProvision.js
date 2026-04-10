@@ -122,7 +122,13 @@ function buildDataNodeSyncForRobot({ robotId, fleetPartial, overridePartial }) {
  * @returns {Record<string, unknown>|null}
  */
 function fleetEnvToPartial(cfg) {
-  if (!cfg || !cfg.provisionEnabled) {
+  if (!cfg) {
+    return null;
+  }
+  if (cfg.provisionEnabled === false || cfg.provisionEnabled === 'false') {
+    return null;
+  }
+  if (!cfg.provisionEnabled && cfg.provisionEnabled !== 0 && cfg.provisionEnabled !== '0') {
     return null;
   }
   const baseUrl = cfg.baseUrl != null && String(cfg.baseUrl).trim() !== '' ? String(cfg.baseUrl).trim() : '';
@@ -148,11 +154,13 @@ function fleetEnvToPartial(cfg) {
 
 /**
  * @param {object} robot
- * @param {object} config - full app config (config.dataNodeSyncFleet)
+ * @param {object} config - full app config (config.dataNodeSyncFleet + services-registration file merge)
  * @returns {Record<string, unknown>|null}
  */
 function buildDataNodeSyncFromRobot(robot, config) {
-  const fleet = fleetEnvToPartial(config.dataNodeSyncFleet);
+  const servicesRegistrationStore = require('./servicesRegistrationStore');
+  const fleetCfg = servicesRegistrationStore.getMergedDataNodeSyncFleet(config);
+  const fleet = fleetEnvToPartial(fleetCfg);
   const override =
     robot.dataNodeSyncOverride != null && isPlainObject(robot.dataNodeSyncOverride)
       ? /** @type {Record<string, unknown>} */ (robot.dataNodeSyncOverride)

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Services registration — Task-router-x402</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="admin-header-row">
+        <h1>Services registration</h1>
+        <nav class="admin-nav-links">
+          <a href="/ui/">Control panel</a>
+          <a href="/ui/teleop-access.html">Teleop access</a>
+        </nav>
+        <button id="admin-logout" type="button" class="admin-logout-btn">Log out</button>
+      </div>
+      <p>
+        Fleet <strong>DATA_NODE</strong> batch settings, optional <strong>help → DATA_NODE</strong> relay overrides, and shared secrets
+        (<code>RAID_TO_ROBOT_SECRET</code>, <code>ROBOT_FLEET_ENROLLMENT_SECRET</code>) can be stored in
+        <code>config/services-registration.json</code> (gitignored). Values merge with environment variables; env wins for some secrets when
+        both are set. Use <strong>Save</strong> then <strong>Test</strong> probes to verify connectivity.
+      </p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>Status</h2>
+        <p id="status-line" class="muted">Loading…</p>
+        <pre id="effective-preview" class="mono-block" aria-label="Effective merged preview (secrets masked)"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>DATA_NODE fleet (batch sync provisioning)</h2>
+        <p class="panel-description">
+          Pushed to robots as <code>dataNodeSync</code> on enroll and on sync. Leave auth token empty to keep the saved value.
+        </p>
+        <form id="fleet-form">
+          <label>
+            Base URL
+            <input name="baseUrl" id="dn-base" type="url" placeholder="https://data-node.example" autocomplete="off" />
+          </label>
+          <label>
+            Batch path
+            <input name="batchPath" id="dn-path" placeholder="/v1/ingest/robot-events" autocomplete="off" />
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" name="enabled" id="dn-enabled" />
+            Uploader enabled (robot default)
+          </label>
+          <label>
+            Interval (sec)
+            <input name="intervalSec" id="dn-interval" type="number" min="60" max="86400" />
+          </label>
+          <label>
+            Auth header name
+            <input name="authHeaderName" id="dn-auth-name" placeholder="Authorization" autocomplete="off" />
+          </label>
+          <label>
+            Auth header value
+            <input name="authHeaderValue" id="dn-auth-val" type="password" placeholder="Leave empty to keep saved" autocomplete="off" />
+          </label>
+          <p class="muted">Include flags (fleet defaults):</p>
+          <label class="checkbox"><input type="checkbox" name="includeDashboardEvents" id="dn-inc-dash" /> Dashboard events</label>
+          <label class="checkbox"><input type="checkbox" name="includeAuditEvents" id="dn-inc-audit" /> Audit events</label>
+          <label class="checkbox"><input type="checkbox" name="includeStateUsbSnapshot" id="dn-inc-usb" /> State / USB snapshot</label>
+          <label class="checkbox"><input type="checkbox" name="includeKyrIncidents" id="dn-inc-kyr" /> KYR incidents</label>
+          <div class="button-row" style="margin-top: 0.75rem">
+            <button type="submit">Save fleet section</button>
+          </div>
+        </form>
+        <div id="fleet-message" class="message"></div>
+        <h3>Test DATA_NODE batch endpoint</h3>
+        <p class="panel-description">
+          Sends a minimal normative batch envelope (see DATA_NODE_INGEST §5). Uses merged config unless you uncheck “use saved”.
+        </p>
+        <label class="checkbox">
+          <input type="checkbox" id="test-dn-use-saved" checked />
+          Use saved + env merge for URL and auth
+        </label>
+        <label>
+          Optional override base URL (only if not using saved)
+          <input id="test-dn-base" type="url" placeholder="https://…" autocomplete="off" />
+        </label>
+        <label>
+          Optional probe <code>raidRobotUuid</code> (string)
+          <input id="test-dn-robot" placeholder="robot uuid" autocomplete="off" />
+        </label>
+        <div class="button-row">
+          <button type="button" id="btn-test-dn">Run DATA_NODE test</button>
+        </div>
+        <pre id="test-dn-out" class="mono-block"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Optional: help → DATA_NODE relay (file overlay)</h2>
+        <p class="panel-description">Merges with <code>DATA_NODE_INCIDENT_RELAY_*</code> env. Auth value: leave empty to keep.</p>
+        <form id="relay-form">
+          <label class="checkbox">
+            <input type="checkbox" name="enabled" id="relay-enabled" />
+            Enabled (merged; requires URL)
+          </label>
+          <label>
+            URL
+            <input name="url" id="relay-url" type="url" placeholder="https://…/v1/ingest/raid-help" autocomplete="off" />
+          </label>
+          <label>
+            Method
+            <input name="method" id="relay-method" placeholder="POST" autocomplete="off" />
+          </label>
+          <label>
+            Auth header name
+            <input name="authHeader" id="relay-auth-h" autocomplete="off" />
+          </label>
+          <label>
+            Auth value
+            <input name="authValue" id="relay-auth-v" type="password" placeholder="Leave empty to keep saved" autocomplete="off" />
+          </label>
+          <div class="button-row">
+            <button type="submit">Save relay section</button>
+          </div>
+        </form>
+        <div id="relay-message" class="message"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Robot-facing secrets</h2>
+        <p class="panel-description">
+          <code>RAID_TO_ROBOT_SECRET</code> — header <code>X-Raid-To-Robot-Secret</code> on <code>operatorRegistryUrl</code>.
+          <code>ROBOT_FLEET_ENROLLMENT_SECRET</code> — fleet enroll. Env overrides file when both are set (see store).
+        </p>
+        <form id="secrets-form">
+          <label>
+            RAID → robot secret (empty = remove from file only)
+            <input name="raidToRobotSecret" id="sec-raid" type="password" autocomplete="off" />
+          </label>
+          <label>
+            Fleet enrollment secret (empty = remove from file only)
+            <input name="fleetEnrollmentSecret" id="sec-fleet" type="password" autocomplete="off" />
+          </label>
+          <div class="button-row">
+            <button type="submit">Save secrets</button>
+          </div>
+        </form>
+        <div id="secrets-message" class="message"></div>
+
+        <h3>Test robot operator registry</h3>
+        <p class="panel-description">
+          POSTs an empty JSON body with <code>X-Raid-To-Robot-Secret</code>. Many robots respond with 4xx if the body is incomplete — that still
+          indicates the host is reachable.
+        </p>
+        <label>
+          Robot
+          <select id="test-robot-sel"></select>
+        </label>
+        <div class="button-row">
+          <button type="button" id="btn-test-robot">Run robot registry test</button>
+        </div>
+        <pre id="test-robot-out" class="mono-block"></pre>
+      </section>
+    </main>
+
+    <script>
+      const api = {
+        async request(path, options = {}) {
+          const response = await fetch(path, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            ...options,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+          });
+          if (response.status === 401 && path.startsWith('/api/admin')) {
+            window.location.href = '/ui/login.html?next=' + encodeURIComponent(location.pathname);
+            throw new Error('Session expired');
+          }
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload?.error || 'Request failed');
+          }
+          return payload;
+        },
+        get() {
+          return this.request('/api/admin/services-registration');
+        },
+        put(body) {
+          return this.request('/api/admin/services-registration', { method: 'PUT', body });
+        },
+        testDn(body) {
+          return this.request('/api/admin/services-registration/test-data-node', { method: 'POST', body });
+        },
+        testRobot(body) {
+          return this.request('/api/admin/services-registration/test-robot-registry', { method: 'POST', body });
+        },
+        listRobots() {
+          return this.request('/api/admin/robots');
+        },
+      };
+
+      function setMessage(el, text, kind) {
+        el.textContent = text;
+        el.className = 'message' + (kind ? ' ' + kind : '');
+      }
+
+      function boolVal(el) {
+        return Boolean(el?.checked);
+      }
+
+      function applyFleetFromServer(f, effective) {
+        const eff = effective && typeof effective === 'object' ? effective : {};
+        const src = f && typeof f === 'object' && Object.keys(f).length ? f : eff;
+        document.getElementById('dn-base').value =
+          src.baseUrl != null && String(src.baseUrl) !== '••••' ? String(src.baseUrl) : '';
+        document.getElementById('dn-path').value = src.batchPath != null ? String(src.batchPath) : '';
+        document.getElementById('dn-enabled').checked =
+          src.enabled === true || src.enabled === 'true' || src.enabled === 1;
+        document.getElementById('dn-interval').value =
+          src.intervalSec != null && src.intervalSec !== '' ? String(src.intervalSec) : '';
+        document.getElementById('dn-auth-name').value = src.authHeaderName != null ? String(src.authHeaderName) : '';
+        document.getElementById('dn-auth-val').value = '';
+        ['includeDashboardEvents', 'includeAuditEvents', 'includeStateUsbSnapshot', 'includeKyrIncidents'].forEach((k) => {
+          const id = {
+            includeDashboardEvents: 'dn-inc-dash',
+            includeAuditEvents: 'dn-inc-audit',
+            includeStateUsbSnapshot: 'dn-inc-usb',
+            includeKyrIncidents: 'dn-inc-kyr',
+          }[k];
+          const el = document.getElementById(id);
+          if (!el) return;
+          const v = src[k];
+          if (v === undefined || v === null) el.checked = true;
+          else el.checked = v === true || v === 'true' || v === 1;
+        });
+      }
+
+      function applyRelayFromServer(f) {
+        if (!f || typeof f !== 'object') return;
+        document.getElementById('relay-enabled').checked =
+          f.enabled === true || f.enabled === 'true' || f.enabled === 1;
+        document.getElementById('relay-url').value = f.url != null ? String(f.url) : '';
+        document.getElementById('relay-method').value = f.method != null ? String(f.method) : '';
+        document.getElementById('relay-auth-h').value = f.authHeader != null ? String(f.authHeader) : '';
+        document.getElementById('relay-auth-v').value = '';
+      }
+
+      function fleetBodyFromForm() {
+        const body = {
+          baseUrl: document.getElementById('dn-base').value.trim() || null,
+          batchPath: document.getElementById('dn-path').value.trim() || null,
+          enabled: boolVal(document.getElementById('dn-enabled')),
+          intervalSec: document.getElementById('dn-interval').value,
+          authHeaderName: document.getElementById('dn-auth-name').value.trim() || null,
+          includeDashboardEvents: boolVal(document.getElementById('dn-inc-dash')),
+          includeAuditEvents: boolVal(document.getElementById('dn-inc-audit')),
+          includeStateUsbSnapshot: boolVal(document.getElementById('dn-inc-usb')),
+          includeKyrIncidents: boolVal(document.getElementById('dn-inc-kyr')),
+        };
+        const av = document.getElementById('dn-auth-val').value;
+        if (av.trim() !== '') {
+          body.authHeaderValue = av.trim();
+        }
+        return { dataNodeSyncFleet: body };
+      }
+
+      function relayBodyFromForm() {
+        const body = {
+          enabled: boolVal(document.getElementById('relay-enabled')),
+          url: document.getElementById('relay-url').value.trim() || null,
+          method: document.getElementById('relay-method').value.trim() || null,
+          authHeader: document.getElementById('relay-auth-h').value.trim() || null,
+        };
+        const av = document.getElementById('relay-auth-v').value;
+        if (av.trim() !== '') {
+          body.authValue = av.trim();
+        }
+        return { dataNodeIncidentRelay: body };
+      }
+
+      async function refresh() {
+        const data = await api.get();
+        document.getElementById('effective-preview').textContent = JSON.stringify(
+          {
+            effectiveDataNodeSyncFleet: data.effectiveDataNodeSyncFleet,
+            effectiveIncidentRelay: data.effectiveIncidentRelay,
+            raidToRobotSecretFromEnv: data.raidToRobotSecretFromEnv,
+            raidToRobotSecretFromFile: data.raidToRobotSecretFromFile,
+            fleetEnrollmentSecretFromEnv: data.fleetEnrollmentSecretFromEnv,
+            fleetEnrollmentSecretFromFile: data.fleetEnrollmentSecretFromFile,
+          },
+          null,
+          2,
+        );
+        applyFleetFromServer(data.dataNodeSyncFleetFile, data.effectiveDataNodeSyncFleet);
+        applyRelayFromServer(data.dataNodeIncidentRelayFile);
+        document.getElementById('status-line').textContent =
+          'Loaded registration state (version ' + (data.version || 1) + ').';
+        return data;
+      }
+
+      document.getElementById('fleet-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const msg = document.getElementById('fleet-message');
+        try {
+          await api.put(fleetBodyFromForm());
+          setMessage(msg, 'Fleet section saved', 'success');
+          await refresh();
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('relay-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const msg = document.getElementById('relay-message');
+        try {
+          await api.put(relayBodyFromForm());
+          setMessage(msg, 'Relay section saved', 'success');
+          await refresh();
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('secrets-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const msg = document.getElementById('secrets-message');
+        const raid = document.getElementById('sec-raid').value;
+        const fleet = document.getElementById('sec-fleet').value;
+        try {
+          await api.put({
+            raidToRobotSecret: raid,
+            fleetEnrollmentSecret: fleet,
+          });
+          document.getElementById('sec-raid').value = '';
+          document.getElementById('sec-fleet').value = '';
+          setMessage(msg, 'Secrets saved (empty fields cleared file-only values)', 'success');
+          await refresh();
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('btn-test-dn').addEventListener('click', async () => {
+        const out = document.getElementById('test-dn-out');
+        out.textContent = '…';
+        const useSaved = document.getElementById('test-dn-use-saved').checked;
+        const base = document.getElementById('test-dn-base').value.trim();
+        const robotId = document.getElementById('test-dn-robot').value.trim();
+        const body = { useSaved };
+        if (robotId) body.robotId = robotId;
+        if (!useSaved && base) {
+          body.override = { baseUrl: base };
+        }
+        try {
+          const res = await api.testDn(body);
+          out.textContent = JSON.stringify(res, null, 2);
+        } catch (e) {
+          out.textContent = e.message;
+        }
+      });
+
+      document.getElementById('btn-test-robot').addEventListener('click', async () => {
+        const out = document.getElementById('test-robot-out');
+        out.textContent = '…';
+        const robotId = document.getElementById('test-robot-sel').value;
+        try {
+          const res = await api.testRobot({ robotId });
+          out.textContent = JSON.stringify(res, null, 2);
+        } catch (e) {
+          out.textContent = e.message;
+        }
+      });
+
+      document.getElementById('admin-logout').addEventListener('click', async () => {
+        await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+        window.location.href = '/ui/login.html';
+      });
+
+      (async () => {
+        try {
+          await refresh();
+          const { robots } = await api.listRobots();
+          const sel = document.getElementById('test-robot-sel');
+          sel.innerHTML = (robots || [])
+            .map((r) => `<option value="${r.id}">${r.name} — ${r.host}:${r.port}</option>`)
+            .join('');
+        } catch (e) {
+          document.getElementById('status-line').textContent = e.message;
+        }
+      })();
+    </script>
+    <style>
+      .mono-block {
+        margin-top: 0.5rem;
+        padding: 0.75rem;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        font-size: 0.8rem;
+        overflow-x: auto;
+        max-height: 22rem;
+      }
+      .button-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+      }
+      .panel-description {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin: 0 0 0.75rem;
+      }
+    </style>
+  </body>
+</html>

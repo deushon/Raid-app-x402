@@ -2,13 +2,14 @@ const express = require('express');
 const { createRequireFleetOrAdmin, createRequireFleetEnrollment } = require('../middleware/robotFleetAuth');
 const { buildDataNodeSyncFromRobot } = require('../services/dataNodeSyncProvision');
 const { omitOperatorProvisioningFields } = require('../services/robotRepository');
+const servicesRegistrationStore = require('../services/servicesRegistrationStore');
 
 /**
  * @param {{ registry: object, config: object, adminConfig: object }} deps
  */
 const createRobotsRouter = ({ registry, config, adminConfig }) => {
   const router = express.Router();
-  const fleetSecret = config.robots?.fleetEnrollmentSecret || null;
+  const fleetSecret = servicesRegistrationStore.getEffectiveFleetEnrollmentSecret(config);
   const requireFleetOrAdmin = createRequireFleetOrAdmin({ fleetEnrollmentSecret: fleetSecret, adminConfig });
   const requireFleetEnrollment = createRequireFleetEnrollment({ fleetEnrollmentSecret: fleetSecret });
 
