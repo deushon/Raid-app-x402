@@ -6,9 +6,10 @@ const packageJson = require('../../package.json');
 const swaggerDefinition = {
   openapi: '3.0.1',
   info: {
-    title: 'Task-router-x402 API',
+    title: 'Homebrew Robotics Task Router (x402) API',
     version: packageJson.version || '1.0.0',
-    description: 'REST API for managing robots and orchestrating x402-enabled commands.',
+    description:
+      'REST API for the Homebrew Robotics Task Router service: robot registry, x402-enabled commands, and related teleoperator flows.',
   },
   tags: [
     { name: 'Health', description: 'Service diagnostics and readiness checks.' },

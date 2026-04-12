@@ -5,8 +5,8 @@ Peaq DID/claim issuance runs on **RAID** (Node.js + peaq SDK). The robot only se
 ## Flow
 
 1. **KYR** — service `/kyr/get_peaq_issuance_metadata` returns JSON for `metadata.kyr_peaq_context` in `POST …/teleop/help`.
-2. **rospy_x402** — `EscalationManager` merges that object, then reads `peaq_claim` from the help response or polls `GET /api/robots/{robotId}/peaq/claim?helpRequestId=…` (see [RAID_APP_PEAQ_CLAIM_SPEC.md](../../br-vr-dev-sinc/DOC/RAID_APP_PEAQ_CLAIM_SPEC.md)).
-3. **teleop_fetch** — service `/teleop_fetch/set_peaq_dataset_claim` writes `peaqClaim` into the dataset `metadata.json`; **dataset_upload_server** adds multipart part `peaqClaim` on push to DATA_NODE ([DATA_NODE_PEAQ_CLAIM_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md)).
+2. **rospy_x402** — `EscalationManager` merges that object, then reads `peaq_claim` from the help response or polls `GET /api/robots/{robotId}/peaq/claim?helpRequestId=…` (see [RAID_APP_PEAQ_CLAIM_SPEC.md](RAID_APP_PEAQ_CLAIM_SPEC.md) or [../RAID_APP_PEAQ_CLAIM_SPEC.md](../RAID_APP_PEAQ_CLAIM_SPEC.md)).
+3. **teleop_fetch** — service `/teleop_fetch/set_peaq_dataset_claim` writes `peaqClaim` into the dataset `metadata.json`; **dataset_upload_server** adds multipart part `peaqClaim` on push to DATA_NODE (multipart field details: `br-vr-dev-sinc` / `DATA_NODE_PEAQ_CLAIM_SPEC`, not vendored here).
 
 ## rosparam (x402 node private namespace)
 

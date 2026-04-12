@@ -2,7 +2,7 @@
 
 **Audience:** RAID App team (`x402_raid_app` or equivalent), product and backend.  
 **Robot:** package `rospy_x402` (`EscalationManager`, node `x402_ex_server`).  
-**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (request body), [RAID_INTEGRATION.md](RAID_INTEGRATION.md), [../br-kyr/DOC/ROSBRIDGE_AND_RAID.md](../../br-kyr/DOC/ROSBRIDGE_AND_RAID.md).
+**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (request body), [RAID_INTEGRATION.md](RAID_INTEGRATION.md), [ROSBRIDGE_AND_RAID.md](ROSBRIDGE_AND_RAID.md) (same bundle; upstream `br-kyr` may have a newer copy).
 
 ## Goal
 

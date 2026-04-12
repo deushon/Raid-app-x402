@@ -8,7 +8,7 @@ HTTP contracts on the RAID side are described in the `x402_raid_app` repository.
 2. **Help (B)** — `POST /api/robots/{robotId}/teleop/help` with `X-Robot-Teleop-Secret` (implemented in `EscalationManager`). JSON body and `metadata.situation_report`: [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md).
 3. **Push allowlist + DATA_NODE batch config (optional)** — RAID calls the **exact** URL from `operatorRegistryUrl` on sync: `POST` with header `X-Raid-To-Robot-Secret`. Body is a JSON object that **must** include at least one of:
    - **`allowedTeleoperatorIds`** (array of UUID strings) — updates `~/.ros/raid_operator_allowlist.json` (same as before).
-   - **`dataNodeSync`** (object) — merges into **`~/.kyr/data_node_sync_settings.json`** for the KYR background batch uploader (see [DATA_NODE_SYNC.md](../../br-kyr/DOC/DATA_NODE_SYNC.md) §4 and [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md)).
+   - **`dataNodeSync`** (object) — merges into **`~/.kyr/data_node_sync_settings.json`** for the KYR background batch uploader (see [DATA_NODE_SYNC.md](DATA_NODE_SYNC.md) §4 and [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](DATA_NODE_INGEST_AND_EVENTS_SPEC.md)).
 
    RAID may send **both** in one POST (recommended when the task router updates operator list and DATA_NODE endpoint/token together). Sending **only** `dataNodeSync` is valid (e.g. DATA_NODE migration without touching allowlist). Sending **only** `allowedTeleoperatorIds` remains valid.
 
@@ -57,7 +57,7 @@ If the robot **does not** call enroll (credentials from launch or state) but you
 
 There is **no** startup retry/backoff — one enroll attempt per launch; add backoff in systemd/wrapper if needed.
 
-Example values for a test rig (must match RAID `.env`): see [`.env.example`](../.env.example) in `rospy_x402` (`ROBOT_FLEET_ENROLLMENT_SECRET`, `RAID_TO_ROBOT_SECRET`).
+Example values for a test rig (must match RAID `.env`): see `.env.example` in the `rospy_x402` repository (`ROBOT_FLEET_ENROLLMENT_SECRET`, `RAID_TO_ROBOT_SECRET`).
 
 ## Persistence
 
@@ -116,4 +116,4 @@ With `teleop_operator_payment_flat_sol` set on `x402_server`, a fixed amount is 
 
 ## Inbound WebSocket (rosbridge)
 
-Operator JWT does not reach rosbridge; RAID forwards headers/query with operator UUID. Stock rosbridge does not validate them — see [ROSBRIDGE_AND_RAID.md](../../br-kyr/DOC/ROSBRIDGE_AND_RAID.md) in KYR.
+Operator JWT does not reach rosbridge; RAID forwards headers/query with operator UUID. Stock rosbridge does not validate them — see [ROSBRIDGE_AND_RAID.md](ROSBRIDGE_AND_RAID.md) (this bundle; upstream KYR may differ).

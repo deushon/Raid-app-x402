@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Task-router-x402</title>
+    <title>Task Router — Homebrew Robotics</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <!-- Use the compiled Tailwind CSS file -->
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -12,12 +14,13 @@
     <nav class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16 items-center">
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-              TR
+          <a href="/client" class="flex items-center gap-2 hover:opacity-90 transition-opacity no-underline">
+            <img src="/brand/hbr-mark.png" alt="Homebrew Robotics" width="32" height="32" class="h-8 w-8 object-contain shrink-0" />
+            <div class="flex flex-col leading-tight text-left">
+              <span class="text-lg font-bold text-white tracking-tight">Homebrew Robotics</span>
+              <span class="text-xs text-slate-400">Task Router (x402)</span>
             </div>
-            <span class="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Task-router-x402</span>
-          </div>
+          </a>
           <div class="flex gap-4">
             <a href="/teleoperator" class="btn-secondary text-xs">Teleoperator Portal</a>
             <a href="/ui" class="btn-secondary text-xs">Admin Login</a>
@@ -106,7 +109,7 @@
           <!-- Direct: robots list -->
           <section id="direct-mode" class="panel">
             <h2 class="text-lg font-semibold mb-4">Available Robots</h2>
-            <div id="robots-list" class="space-y-3">
+            <div id="robots-list" class="client-demo-list">
               <div class="animate-pulse flex space-x-4">
                 <div class="flex-1 space-y-4 py-1">
                   <div class="h-4 bg-slate-700 rounded w-3/4"></div>
@@ -122,7 +125,7 @@
           <!-- Task Router mode (API: raid): actions -->
           <section id="raid-mode" class="panel hidden">
             <h2 class="text-lg font-semibold mb-4">Available Actions (Task Router)</h2>
-            <div id="commands-list" class="space-y-3">
+            <div id="commands-list" class="client-demo-list client-demo-list--commands">
               <p class="text-slate-400 italic text-sm">Loading available network actions...</p>
             </div>
           </section>
@@ -130,7 +133,7 @@
           <!-- Action form -->
           <section id="action-form-section" class="panel hidden border-indigo-500/30 shadow-lg shadow-indigo-500/5">
             <h2 id="action-form-title" class="text-lg font-semibold mb-4 text-indigo-300">Execute Action</h2>
-            <div id="action-form" class="space-y-4">
+            <div id="action-form" class="action-form space-y-4">
               <!-- Filled dynamically -->
             </div>
             
@@ -170,6 +173,14 @@
         </div>
       </div>
     </main>
+
+    <footer class="border-t border-slate-800 py-6 mt-4 text-center text-sm text-slate-500">
+      <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+        <a href="https://www.homebrew.build/" class="text-slate-400 hover:text-slate-300 no-underline" rel="noopener noreferrer">Homebrew Robotics — homebrew.build</a>
+        <span class="text-slate-600 select-none" aria-hidden="true">·</span>
+        <a href="https://x.com/homebrewrobots" class="text-slate-400 hover:text-slate-300 no-underline" rel="noopener noreferrer">@homebrewrobots on X</a>
+      </p>
+    </footer>
 
     <!-- Modals Overlay -->
     <div id="modal-backdrop" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-40 hidden transition-opacity"></div>
@@ -295,34 +306,7 @@
       });
     </script>
     <style>
-      /* Temporary overrides for JS-generated elements inside app.js */
-      .robots-list .robot-item, .commands-list .command-item {
-        @apply bg-slate-900/50 border border-slate-700/50 rounded-lg p-4 mb-3 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-colors duration-200;
-      }
-      .robots-list .robot-item.selected, .commands-list .command-item.selected {
-        @apply border-indigo-500 bg-indigo-900/20 shadow-inner shadow-indigo-500/10;
-      }
-      .robot-item h3, .command-item h3 {
-        @apply text-base font-medium text-slate-200 m-0 mb-1;
-      }
-      .robot-item p, .command-item p {
-        @apply text-xs text-slate-400 m-0;
-      }
-      .command-item .cost {
-        @apply mt-2 inline-block px-2 py-1 bg-solana/10 text-solana text-xs font-medium rounded;
-      }
-      
-      /* Dynamic forms generated by app.js */
-      .action-form .form-group {
-        @apply mb-4;
-      }
-      .action-form label {
-        @apply block text-sm font-medium leading-6 text-slate-300 mb-1;
-      }
-      .action-form input, .action-form select {
-        @apply block w-full rounded-md border-0 bg-slate-900/50 py-2 px-3 text-slate-200 shadow-sm ring-1 ring-inset ring-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6;
-      }
-      
+      /* Demo list + action forms: see src/styles/input.css (.client-*, .action-form) */
       /* Wallet items */
       .wallet-item {
         @apply flex items-center p-3 rounded-lg border border-slate-700/50 hover:bg-slate-700 hover:border-slate-500 cursor-pointer transition-all duration-200 mb-2;

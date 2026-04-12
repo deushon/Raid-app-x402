@@ -1,6 +1,8 @@
 # Task-router-x402
 
-Node.js (Express) **x402 Task Router**: orchestrates x402 payments and robot calls. It includes a **public client UI** (`/client`), an **admin panel** (`/ui`, Basic Auth), REST APIs for the robot registry, high-level commands, and the **client flow** (estimate, 402 invoice, in-browser payment, execution with **X-X402-Reference**).
+**Homebrew Robotics** — Node.js (Express) **x402 Task Router**: orchestrates x402 payments and robot calls. It includes a **public client UI** (`/client`), an **admin panel** (`/ui`, Basic Auth), REST APIs for the robot registry, high-level commands, and the **client flow** (estimate, 402 invoice, in-browser payment, execution with **X-X402-Reference**).
+
+For **AI coding agents** (repo layout, constraints, and a full documentation map), see [AGENTS.md](AGENTS.md).
 
 ## Features
 
@@ -306,6 +308,7 @@ npm test
 
 - [CHANGELOG.md](CHANGELOG.md) — summary of recent changes (use for PR descriptions).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — language policy, OpenAPI, tests, and commit expectations for this repo.
+- [AGENTS.md](AGENTS.md) — guidance for AI agents: code locations, constraints, and this index in one place.
 - [docs/CLIENT_UI.md](docs/CLIENT_UI.md) — public `/client` UI: modes, wallet, API usage.
 - [docs/X402_PROTOCOL.md](docs/X402_PROTOCOL.md) — x402 client flow and robot **402** retry.
 - [docs/RAID_APP_TELEOP_HELP_SPEC.md](docs/RAID_APP_TELEOP_HELP_SPEC.md) — robot **`POST …/teleop/help`** body (`message`, `metadata`, `situation_report`, Peaq context).
@@ -316,8 +319,10 @@ npm test
 - [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md) — **stable vs cosmetic** naming; what robots and KYR must not break on upgrade.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
 - [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — push **`allowedTeleoperatorIds`** and/or **`dataNodeSync`** to the robot (`RAID_TO_ROBOT_SECRET`, fleet env **`DATA_NODE_SYNC_*`**, per-robot **`dataNodeSyncOverride`**).
+- [docs/SERVICES_REGISTRATION_ROBOT.md](docs/SERVICES_REGISTRATION_ROBOT.md) — Services registration: robot / operator-registry side (mirrors RAID admin UI).
+- [docs/SERVICES_REGISTRATION_DATA_NODE.md](docs/SERVICES_REGISTRATION_DATA_NODE.md) — Services registration: DATA_NODE operators (probes, credentials, relay).
 - [docs/MERMAID_ARCHITECTURE.md](docs/MERMAID_ARCHITECTURE.md) — diagram: RAID, robot, DATA_NODE, teleop paths.
-- [docs/TASK_ROUTER_FULL_SINC/](docs/TASK_ROUTER_FULL_SINC/) — bundled specs for RAID / robot / DATA_NODE alignment (handoff snapshots).
+- [docs/TASK_ROUTER_FULL_SINC/README.md](docs/TASK_ROUTER_FULL_SINC/README.md) — handoff bundle: table of snapshot files and upstream **SOURCE** repos (folder: [docs/TASK_ROUTER_FULL_SINC/](docs/TASK_ROUTER_FULL_SINC/)).
 - [docs/ROBOT_TELEOP_KYR_RAID_GRANT.md](docs/ROBOT_TELEOP_KYR_RAID_GRANT.md) — Task Router → KYR: SessionGrant, `trusted_raid_keys`, `pending_from_raid`, operator payment.
 - [docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md) — full teleop + x402 + SessionGrant cycle.
 - [docs/RAID_APP_PEAQ_CLAIM_SPEC.md](docs/RAID_APP_PEAQ_CLAIM_SPEC.md) — Peaq claim on help requests (Agung / dev).

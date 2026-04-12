@@ -2,7 +2,7 @@
 
 **Audience:** robot software developers (`teleop_fetch`, `rospy_x402`, KYR, `EscalationManager`).  
 **RAID side:** `x402_raid_app` repository.  
-**Related:** [RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md), [TELEOP_FETCH.md](TELEOP_FETCH.md).
+**Related:** [RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md), [../TELEOP_FETCH.md](../TELEOP_FETCH.md).
 
 **Robot implementation:** after `POST …/teleop/help`, if the response has no inline `teleopGrantPayload`, `EscalationManager` calls **`raid_session_grant_client.poll_raid_session_grant`** (params `~raid_session_grant_poll`, `~raid_session_grant_timeout_sec`, `~raid_session_grant_interval_sec` on `x402_server`).
 
@@ -176,5 +176,5 @@ If all hold and still no on-chain transfer — inspect Solana/x402 logs on the *
 ## 9. Links
 
 - Full cycle and diagram: [RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md)  
-- HTTP help from robot: [TELEOP_FETCH.md](TELEOP_FETCH.md)  
+- HTTP help from robot: [../TELEOP_FETCH.md](../TELEOP_FETCH.md)  
 - RAID OpenAPI: `https://<raid-host>/docs`

@@ -41,7 +41,7 @@ const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
 const servicesRegistrationStore = require('./services/servicesRegistrationStore');
 const { startMdnsAdvertisement } = require('./services/mdnsAdvertisement');
-const { registerPublicTailwindCss } = require('./publicStaticRoutes');
+const { registerPublicTailwindCss, registerPublicBrandAssets } = require('./publicStaticRoutes');
 
 const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
@@ -148,6 +148,7 @@ const bootstrap = async () => {
 
   const publicRoot = path.join(__dirname, '..', 'public');
   registerPublicTailwindCss(app, publicRoot, logger);
+  registerPublicBrandAssets(app, publicRoot, logger);
 
   // Admin panel: cookie session (login page) + optional Basic on /api/admin only
   // Do not register app.get('/ui') → redirect to '/ui/': in Express 5 that route also matches

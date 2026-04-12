@@ -2,8 +2,8 @@
 
 **Audience:** KYR / robot operators and integrators.  
 **Version:** 2026-04-10.  
-**DATA_NODE API contract:** [br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5.  
-**RAID help fields (not this path):** [br-vr-dev-sinc/DOC/RAID_APP_DATA_NODE_CORRELATION_SPEC.md](../../br-vr-dev-sinc/DOC/RAID_APP_DATA_NODE_CORRELATION_SPEC.md).
+**DATA_NODE API contract:** [TASK_ROUTER_FULL_SINC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md](TASK_ROUTER_FULL_SINC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5 (handoff snapshot; upstream `br-vr-dev-sinc` may differ).  
+**RAID help fields (not this path):** [RAID_APP_DATA_NODE_CORRELATION_SPEC.md](RAID_APP_DATA_NODE_CORRELATION_SPEC.md).
 
 ---
 
@@ -54,7 +54,7 @@ The Black Box page **DATA_NODE sync** panel loads/saves settings via **`GET/POST
 
 ## 4. Uploader behaviour
 
-1. On an interval, if **`enabled`** and **`base_url`** are set, build a **batch** per [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5.
+1. On an interval, if **`enabled`** and **`base_url`** are set, build a **batch** per [TASK_ROUTER_FULL_SINC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md](TASK_ROUTER_FULL_SINC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5.
 2. **Dashboard / audit:** read only **appended** bytes since the last successful cursor; each JSON line becomes one `RobotEvent` with deterministic `eventUid` (content hash) for idempotency.
 3. **State / USB:** compare `devices_hash` in `state.json` to the cursor; on change, send one event with `source: "kyr_state"`, `kind: "usb_devices_changed"`, and a **truncated** `devices` list in `metadata` (cap count and field sizes to keep batches small).
 4. On **HTTP success**, advance cursors. On failure, **do not** advance (retry next cycle). Log errors to stderr (Flask / ROS console).
@@ -64,5 +64,5 @@ The Black Box page **DATA_NODE sync** panel loads/saves settings via **`GET/POST
 
 ## 5. Related
 
-- Black Box overview: [BLACKBOX_DASHBOARD.md](BLACKBOX_DASHBOARD.md).
+- Black Box overview: KYR **Black Box** web UI and settings files (§2–3 above); no separate doc file in this repository.
 - Dataset push (teleop): `br-vr-dev-sinc` / `teleop_fetch` docs.

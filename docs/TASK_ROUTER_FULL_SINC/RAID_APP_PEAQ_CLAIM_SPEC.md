@@ -3,7 +3,7 @@
 **Audience:** developers of `x402_raid_app` (Node.js).  
 **Robot-side:** `rospy_x402` sends KYR issuance context in `POST …/teleop/help` and fetches a claim via `GET …/peaq/claim`. Peaq SDK usage ([Onboard a Machine](https://docs.peaq.xyz/build/first-depin/onboard-machine), [DID Operations](https://docs.peaq.xyz/sdk-reference/javascript/did-operations)) runs **on RAID**, not on the robot.
 
-**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](https://github.com/deushon/rospy_x402/blob/DEV/DOC/RAID_APP_TELEOP_HELP_SPEC.md) (package `rospy_x402`, branch `DEV`), [DATA_NODE_PEAQ_CLAIM_SPEC.md](DATA_NODE_PEAQ_CLAIM_SPEC.md).
+**Related:** [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (same bundle), [../RAID_APP_TELEOP_HELP_SPEC.md](../RAID_APP_TELEOP_HELP_SPEC.md) (canonical in this repo), [PEAQ_RAID_CLAIM.md](PEAQ_RAID_CLAIM.md) (Peaq path via robot / dataset). External DATA_NODE multipart spec lives in the `br-vr-dev-sinc` product repo if you need field-level detail.
 
 ---
 

@@ -2,8 +2,8 @@
 
 **Audience:** KYR / robot operators and integrators.  
 **Version:** 2026-04-11.  
-**DATA_NODE API contract:** [br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5.  
-**RAID help fields (not this path):** [br-vr-dev-sinc/DOC/RAID_APP_DATA_NODE_CORRELATION_SPEC.md](../../br-vr-dev-sinc/DOC/RAID_APP_DATA_NODE_CORRELATION_SPEC.md).
+**DATA_NODE API contract:** [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5 (this bundle; upstream `br-vr-dev-sinc` may differ).  
+**RAID help fields (not this path):** [RAID_APP_DATA_NODE_CORRELATION_SPEC.md](RAID_APP_DATA_NODE_CORRELATION_SPEC.md) or [../RAID_APP_DATA_NODE_CORRELATION_SPEC.md](../RAID_APP_DATA_NODE_CORRELATION_SPEC.md).
 
 ---
 
@@ -14,7 +14,7 @@ Teleop datasets reach DATA_NODE via **`POST /sessions/upload`** when a recording
 - **USB / device list changes** (from `state.json` / `devices_hash`),
 - **Verification audit** lines (`audit.jsonl`),
 - **Dashboard** JSONL events (`dashboard_events.jsonl`) that are not tied to a dataset upload,
-- **KYR incidents** (`incidents.jsonl`) — structured incidents with stable `incident_uid` (see [KYR_INCIDENTS.md](KYR_INCIDENTS.md)).
+- **KYR incidents** (`incidents.jsonl`) — structured incidents with stable `incident_uid` (see KYR product docs; no `KYR_INCIDENTS.md` in this repo).
 
 The KYR **Black Box** web UI can enable a **background uploader** that every **N seconds** sends new rows to DATA_NODE’s **robot event batch** endpoint, so the fleet database gets a timeline without teleop.
 
@@ -59,7 +59,7 @@ The Black Box page **DATA_NODE sync** panel loads/saves settings via **`GET/POST
 
 **Authoritative control:** RAID can supply DATA_NODE batch settings so operators do not paste tokens into the robot UI.
 
-1. **Enroll** — `POST /api/robots/enroll` response may include **`dataNodeSync`** (see [rospy_x402/DOC/RAID_INTEGRATION.md](../../rospy_x402/DOC/RAID_INTEGRATION.md)). `x402_ex_server` merges it into `data_node_sync_settings.json` and sets **`raid_provisioned`: true**.
+1. **Enroll** — `POST /api/robots/enroll` response may include **`dataNodeSync`** (see [RAID_INTEGRATION.md](RAID_INTEGRATION.md) in this bundle, or the `rospy_x402` repo). `x402_ex_server` merges it into `data_node_sync_settings.json` and sets **`raid_provisioned`: true**.
 2. **Push** — Same object may be sent on the existing **`POST {operatorRegistryUrl}`** (operator allowlist endpoint on the robot) together with **`allowedTeleoperatorIds`**, or alone when only DATA_NODE endpoint/token changed.
 3. **Updates** — Re-enroll or another push overwrites fields present in the payload. Empty **`authHeaderValue`** omits updating the stored token (keeps previous secret).
 
@@ -67,9 +67,9 @@ The Black Box page **DATA_NODE sync** panel loads/saves settings via **`GET/POST
 
 ## 5. Uploader behaviour
 
-1. On an interval, if **`enabled`** and **`base_url`** are set, build a **batch** per [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](../../br-vr-dev-sinc/DOC/DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5.
+1. On an interval, if **`enabled`** and **`base_url`** are set, build a **batch** per [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](DATA_NODE_INGEST_AND_EVENTS_SPEC.md) §5 (same bundle; upstream copy in `br-vr-dev-sinc` if needed).
 2. **Dashboard / audit:** read only **appended** bytes since the last successful cursor; each JSON line becomes one `RobotEvent` with deterministic `eventUid` (content hash) for idempotency.
-3. **Incidents:** read appended bytes from **`incidents.jsonl`**; each line maps to one event with `source: "kyr_incident"` and **`eventUid` equal to `incident_uid`** (see [KYR_INCIDENTS.md](KYR_INCIDENTS.md)).
+3. **Incidents:** read appended bytes from **`incidents.jsonl`**; each line maps to one event with `source: "kyr_incident"` and **`eventUid` equal to `incident_uid`** (KYR product docs).
 4. **State / USB:** compare `devices_hash` in `state.json` to the cursor; on change, send one event with `source: "kyr_state"`, `kind: "usb_devices_changed"`, and a **truncated** `devices` list in `metadata` (cap count and field sizes to keep batches small).
 5. On **HTTP success**, advance cursors. On failure, **do not** advance (retry next cycle). Log errors to stderr (Flask / ROS console).
 6. Clearing **`dashboard_events.jsonl`** via the UI resets the dashboard cursor on next read if the file shrinks (offset &gt; file size → cursor reset to 0).
@@ -78,6 +78,6 @@ The Black Box page **DATA_NODE sync** panel loads/saves settings via **`GET/POST
 
 ## 6. Related
 
-- Incidents model: [KYR_INCIDENTS.md](KYR_INCIDENTS.md).
-- Black Box overview: [BLACKBOX_DASHBOARD.md](BLACKBOX_DASHBOARD.md).
+- Incidents model: KYR product documentation (`incidents.jsonl`).
+- Black Box overview: §2–3 above and the KYR web UI (no bundled `BLACKBOX_DASHBOARD.md` in this repo).
 - Dataset push (teleop): `br-vr-dev-sinc` / `teleop_fetch` docs.

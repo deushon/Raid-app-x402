@@ -3,7 +3,7 @@
 **Audience:** DATA_NODE service developers (storage, APIs, operator UI).  
 **Version:** 2026-04-11.  
 **RAID App (help metadata only):** [RAID_APP_DATA_NODE_CORRELATION_SPEC.md](RAID_APP_DATA_NODE_CORRELATION_SPEC.md).  
-**Robot periodic upload (non-teleop events):** [br-kyr/DOC/DATA_NODE_SYNC.md](../../br-kyr/DOC/DATA_NODE_SYNC.md).
+**Robot periodic upload (non-teleop events):** [DATA_NODE_SYNC.md](DATA_NODE_SYNC.md) (this bundle; upstream `br-kyr` may differ).
 
 ---
 
@@ -12,11 +12,11 @@
 DATA_NODE holds:
 
 1. **Robots** — stable registry (`kyr_robot_id`, `raid_enroll_robot_uuid`, model, firmware hints).
-2. **Teleop session cards** — primarily from **`POST /sessions/upload`** (`.hbr` + multipart); see [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md), [HBR.md](HBR.md), [DATA_NODE_PEAQ_CLAIM_SPEC.md](DATA_NODE_PEAQ_CLAIM_SPEC.md).
+2. **Teleop session cards** — primarily from **`POST /sessions/upload`** (`.hbr` + multipart); see [../DATA_NODE_OPERATOR_SESSION_SPEC.md](../DATA_NODE_OPERATOR_SESSION_SPEC.md), [PEAQ_RAID_CLAIM.md](PEAQ_RAID_CLAIM.md). HBR layout: `br-vr-dev-sinc` docs (not vendored here).
 3. **Incidents** — abnormal situations; may originate from RAID help, robot-reported payloads, or operator entry.
 4. **Robot event stream** — **append-only** rows for **non-teleop** or **non-dataset** activity: USB attach/detach signals, dashboard feed lines, audit samples, state-hash transitions, etc. These **do not** replace `.hbr`; they enable fleet timelines without opening archives.
 
-Teleop-linked data continues to arrive mainly **at dataset push** (session end / upload complete). Everything else uses **§5** (batch endpoint) when the robot enables sync. **URL and auth** for that client are normally **provisioned by RAID** (enroll or push to the robot); see §5.2 and [rospy_x402/DOC/RAID_INTEGRATION.md](../../rospy_x402/DOC/RAID_INTEGRATION.md).
+Teleop-linked data continues to arrive mainly **at dataset push** (session end / upload complete). Everything else uses **§5** (batch endpoint) when the robot enables sync. **URL and auth** for that client are normally **provisioned by RAID** (enroll or push to the robot); see §5.2 and [RAID_INTEGRATION.md](RAID_INTEGRATION.md).
 
 ---
 
@@ -119,7 +119,7 @@ Rows for “something went wrong”: `operator_help_requested`, `during_teleop`,
 | `kyrSessionId` | KYR teleop session id when present in `metadata.json`. |
 | `raidRobotUuid` | RAID enroll uuid from robot params. |
 
-Authoritative copy remains **`metadata.json` inside the archive** if multipart disagrees ([DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md) §1).
+Authoritative copy remains **`metadata.json` inside the archive** if multipart disagrees ([../DATA_NODE_OPERATOR_SESSION_SPEC.md](../DATA_NODE_OPERATOR_SESSION_SPEC.md) §1).
 
 ---
 
@@ -190,7 +190,7 @@ If a backend only stores batch rows in **`robot_events`** (§3.4) and does not p
 
 ### 5.2 Batch auth provisioning (RAID → robot → DATA_NODE)
 
-DATA_NODE issues **API credentials** (shared secret, bearer token, or mTLS policy) to **RAID** (task router), not to each robot by hand. RAID stores per-robot or per-fleet batch config and pushes **`dataNodeSync`** to the robot (see [RAID_INTEGRATION.md](../../rospy_x402/DOC/RAID_INTEGRATION.md)). The robot persists merged settings under **`~/.kyr/data_node_sync_settings.json`** and the KYR worker sends **`Authorization`** (or the configured header) on **`POST …/robot-events`**.
+DATA_NODE issues **API credentials** (shared secret, bearer token, or mTLS policy) to **RAID** (task router), not to each robot by hand. RAID stores per-robot or per-fleet batch config and pushes **`dataNodeSync`** to the robot (see [RAID_INTEGRATION.md](RAID_INTEGRATION.md)). The robot persists merged settings under **`~/.kyr/data_node_sync_settings.json`** and the KYR worker sends **`Authorization`** (or the configured header) on **`POST …/robot-events`**.
 
 **DATA_NODE product work:** expose an admin or RAID-only API to create/rotate ingest tokens and optional **base URL** overrides when DATA_NODE is relocated; RAID then propagates updates on the next enroll or operator-sync push so robots are not “soft-locked” to an old endpoint.
 
@@ -217,5 +217,5 @@ DATA_NODE issues **API credentials** (shared secret, bearer token, or mTLS polic
 ## 8. Related documentation
 
 - [RAID_APP_DATA_NODE_CORRELATION_SPEC.md](RAID_APP_DATA_NODE_CORRELATION_SPEC.md)
-- [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md)
-- [br-kyr/DOC/DATA_NODE_SYNC.md](../../br-kyr/DOC/DATA_NODE_SYNC.md) — KYR UI + worker behaviour
+- [../DATA_NODE_OPERATOR_SESSION_SPEC.md](../DATA_NODE_OPERATOR_SESSION_SPEC.md)
+- [DATA_NODE_SYNC.md](DATA_NODE_SYNC.md) — KYR UI + worker behaviour (this bundle)

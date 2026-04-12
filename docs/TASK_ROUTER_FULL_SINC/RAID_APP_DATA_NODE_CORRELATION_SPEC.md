@@ -2,7 +2,7 @@
 
 **Audience:** RAID App developers (`x402_raid_app` or equivalent).  
 **Version:** 2026-04-10.  
-**Does not replace:** base `POST …/teleop/help` contract — [rospy_x402/DOC/RAID_APP_TELEOP_HELP_SPEC.md](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_SPEC.md).  
+**Does not replace:** base `POST …/teleop/help` contract — [RAID_APP_TELEOP_HELP_SPEC.md](RAID_APP_TELEOP_HELP_SPEC.md) (this bundle) or [../RAID_APP_TELEOP_HELP_SPEC.md](../RAID_APP_TELEOP_HELP_SPEC.md) (canonical in repo).  
 **DATA_NODE (storage / joins):** [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](DATA_NODE_INGEST_AND_EVENTS_SPEC.md).
 
 ---
@@ -60,5 +60,5 @@ If no recording is active, `dataset_id` may be empty and `task_id` may be synthe
 ## 5. Related documentation
 
 - [DATA_NODE_INGEST_AND_EVENTS_SPEC.md](DATA_NODE_INGEST_AND_EVENTS_SPEC.md) — DATA_NODE tables, ingest, robot event batch.
-- [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md) — dataset `metadata.json`, `operatorSessionMeta`.
-- Robot-side correlation params and HBR keys: `teleop_fetch`, `rospy_x402` `EscalationManager`, [br-kyr/DOC/DATA_NODE_SYNC.md](../../br-kyr/DOC/DATA_NODE_SYNC.md).
+- [../DATA_NODE_OPERATOR_SESSION_SPEC.md](../DATA_NODE_OPERATOR_SESSION_SPEC.md) — dataset `metadata.json`, `operatorSessionMeta`.
+- Robot-side correlation params and HBR keys: `teleop_fetch`, `rospy_x402` `EscalationManager`, [DATA_NODE_SYNC.md](DATA_NODE_SYNC.md) (this bundle).
