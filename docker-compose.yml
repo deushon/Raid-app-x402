@@ -41,9 +41,9 @@ services:
     restart: unless-stopped
     # mDNS (MDNS_ENABLED): on default bridge, multicast from the host often does not reach the container.
     # For LAN advertisement use network_mode: host (then reconcile or remove ports).
-    # Host port defaults to 3001 when APP_HOST_PORT unset (3000 often used by other stacks on shared servers).
+    # Host port: set APP_HOST_PORT if 3000 is taken by another stack on this host.
     ports:
-      - "0.0.0.0:${APP_HOST_PORT:-3001}:3000"
+      - "0.0.0.0:${APP_HOST_PORT:-3000}:3000"
     env_file: .env
     environment:
       HOST: 0.0.0.0
