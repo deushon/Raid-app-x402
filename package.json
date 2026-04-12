@@ -7,6 +7,7 @@
     "dev": "nodemon ./src/index.js",
     "build:css": "tailwindcss -i ./src/styles/input.css -o ./public/styles.css",
     "build:brand": "node scripts/build-brand-assets.js",
+    "pack:kyr-vr-handoff": "mkdir -p TEMP/kyr-handoff TEMP/vr-handoff && cp docs/ROBOT_TELEOP_KYR_RAID_GRANT.md docs/ROBOT_INTEGRATION_STABILITY.md docs/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md docs/TELEOP_FETCH.md TEMP/kyr-handoff/ && cp docs/VR_TELEOP_HELP_CLIENT.md docs/VR_TELEOP_SESSION_COMPLETION.md TEMP/vr-handoff/",
     "watch:css": "tailwindcss -i ./src/styles/input.css -o ./public/styles.css --watch",
     "peaq:onboard": "node scripts/peaqOnboardMachine.js",
     "peaq:faucet": "node scripts/peaqFaucetRequest.js",

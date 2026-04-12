@@ -234,7 +234,7 @@ Changes in third-party repos are out of scope; below is the integration contract
 
 1. **Base URL** — same host/port as HTTP API (or **`wss://`** behind a reverse proxy with `Upgrade`).
 2. **JWT**: after `POST /api/teleoperator/login` or `register`, store **`accessToken`** (or browser-only cookie `teleop_token`).
-3. **Flow**: `GET /api/teleoperator/help-requests` → `POST /api/teleoperator/help-requests/{id}/accept` → response **`session.id`**. Each request’s **`payload`** has **`message`** and **`metadata`** (including **`situation_report`** for VR/UI and optional **`dataset_id`** / **`kyr_session_id`** / **`kyr_robot_id`** when the robot sends them). WS **`help_request`** carries the same **`data.payload`**. Quest/Unity: [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md).
+3. **Flow**: `GET /api/teleoperator/help-requests` → `POST /api/teleoperator/help-requests/{id}/accept` → response **`session.id`**. Optional **`POST /api/teleoperator/sessions/{sessionId}/decline-before-connect`** before opening **`/ws/teleop/session/{sessionId}`** (reopens help for others). After proxy WS: **`POST /api/teleoperator/sessions/{sessionId}/end`** with JSON **`reason`** (**`graceful_complete`**, **`operator_cancelled`**, **`network_quality_abort`**, **`client_error`**). Each request’s **`payload`** has **`message`** and **`metadata`** (including **`situation_report`** for VR/UI and optional **`dataset_id`** / **`kyr_session_id`** / **`kyr_robot_id`** when the robot sends them). WS **`help_request`** carries the same **`data.payload`**. Quest/Unity: [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md), [docs/VR_TELEOP_SESSION_COMPLETION.md](docs/VR_TELEOP_SESSION_COMPLETION.md).
 4. **WebSocket (instead of `ws://<robot>:9090`)**:
    - `ws(s)://<host>:<port>/ws/teleop/session/<sessionId>?token=<URL-encoded JWT>`
    - After connect, send the **same JSON text frames** as direct ROSBridge WebSocket (e.g. `op: subscribe`, `op: publish`).
@@ -316,6 +316,7 @@ npm test
 - [docs/DATA_NODE_SYNC.md](docs/DATA_NODE_SYNC.md) — KYR Black Box periodic upload of non-teleop robot events to DATA_NODE (not implemented in this Node service; operators use KYR UI).
 - [docs/TELEOP_FETCH.md](docs/TELEOP_FETCH.md) — HTTP `teleop/help` from the robot (`teleop_fetch`) and WS/rosbridge.
 - [docs/VR_TELEOP_HELP_CLIENT.md](docs/VR_TELEOP_HELP_CLIENT.md) — **`payload.metadata.situation_report`** for VR/operator UI.
+- [docs/VR_TELEOP_SESSION_COMPLETION.md](docs/VR_TELEOP_SESSION_COMPLETION.md) — decline-before-connect, **`POST …/sessions/{id}/end`** + **`reason`**, RAID vs robot payout.
 - [docs/ROBOT_INTEGRATION_STABILITY.md](docs/ROBOT_INTEGRATION_STABILITY.md) — **stable vs cosmetic** naming; what robots and KYR must not break on upgrade.
 - [docs/ROBOT_SIDE_AI_AGENT.md](docs/ROBOT_SIDE_AI_AGENT.md) — guide for **robot-side code**: enroll, secrets, help, allowlist, rosbridge.
 - [docs/ROBOT_OPERATOR_SYNC.md](docs/ROBOT_OPERATOR_SYNC.md) — push **`allowedTeleoperatorIds`** and/or **`dataNodeSync`** to the robot (`RAID_TO_ROBOT_SECRET`, fleet env **`DATA_NODE_SYNC_*`**, per-robot **`dataNodeSyncOverride`**).

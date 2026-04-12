@@ -50,7 +50,7 @@ run('teleop help HTTP', () => {
     await ensureRobotSchema(pool);
     await ensureTeleoperatorRobotGrantsSchema(pool);
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
 
     const config = loadConfig([]);
@@ -136,7 +136,7 @@ run('teleop help HTTP', () => {
   after(async () => {
     if (pool) {
       await pool.query(
-        'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+        'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
       );
       await pool.end();
     }
@@ -291,7 +291,7 @@ run('teleop help HTTP', () => {
 
   test('second operator gets 409 on accept', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -325,7 +325,7 @@ run('teleop help HTTP', () => {
 
   test('accept 403 when another operator has grant but not this one', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -366,7 +366,7 @@ run('teleop help HTTP', () => {
 
   test('help list shows granted robot only to granted operator; open robot to all', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -417,7 +417,7 @@ run('teleop help HTTP', () => {
 
   test('help payload includes situation_report for operator list', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -456,7 +456,7 @@ run('teleop help HTTP', () => {
 
   test('help payload includes DATA_NODE correlation metadata for operator list', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -496,7 +496,7 @@ run('teleop help HTTP', () => {
 
   test('grantRepository listActive exposes teleoperator_login (login_normalized)', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -518,7 +518,7 @@ run('teleop help HTTP', () => {
 
   test('help response includes top-level id, peaq_claim; GET peaq/claim with secret', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -574,7 +574,7 @@ run('teleop help HTTP', () => {
 
   test('POST help 413 when kyr_peaq_context JSON exceeds 64 KiB', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -596,7 +596,7 @@ run('teleop help HTTP', () => {
 
   test('GET peaq/claim 404 when peaq disabled (no stored claim)', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -649,7 +649,7 @@ run('teleop help HTTP', () => {
 
   test('POST help peaq fallback when buildClaim rejects: stored failure claim, GET returns 200', async () => {
     await pool.query(
-      'TRUNCATE teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
     );
     await registry.loadFromPersistence();
 
@@ -716,5 +716,192 @@ run('teleop help HTTP', () => {
       .set('X-Robot-Teleop-Secret', teleopSecret)
       .expect(200);
     assert.equal(ok.body.peaq_claim.raid_peaq_read_status, 'failed');
+  });
+
+  test('decline-before-connect reopens help and excludes operator; second operator can accept', async () => {
+    await pool.query(
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65519,
+      teleopSecret,
+    });
+    const robotId = reg.id;
+
+    const h = await request(app)
+      .post(`/api/robots/${robotId}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'd1', metadata: {} })
+      .expect(201);
+    const helpId = h.body.helpRequest.id;
+
+    const w1 = Keypair.generate().publicKey.toBase58();
+    const w2 = Keypair.generate().publicKey.toBase58();
+    const agent1 = request.agent(app);
+    await agent1
+      .post('/api/teleoperator/register')
+      .send({ login: 'decl1', password: 'password12', walletPublicKey: w1 })
+      .expect(201);
+    const acc = await agent1.post(`/api/teleoperator/help-requests/${helpId}/accept`).expect(200);
+    const sessionId = acc.body.session.id;
+
+    const decl = await agent1
+      .post(`/api/teleoperator/sessions/${sessionId}/decline-before-connect`)
+      .expect(200);
+    assert.equal(decl.body.helpRequest.status, 'open');
+
+    const g = await request(app)
+      .get(`/api/robots/${robotId}/teleop/session-grant`)
+      .query({ helpRequestId: helpId })
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .expect(404);
+    assert.equal(g.body.error, 'grant_not_ready');
+
+    const list1 = await agent1.get('/api/teleoperator/help-requests').expect(200);
+    assert.equal(list1.body.helpRequests.length, 0);
+
+    const agent2 = request.agent(app);
+    await agent2
+      .post('/api/teleoperator/register')
+      .send({ login: 'decl2', password: 'password12', walletPublicKey: w2 })
+      .expect(201);
+    const list2 = await agent2.get('/api/teleoperator/help-requests').expect(200);
+    assert.equal(list2.body.helpRequests.length, 1);
+    assert.equal(list2.body.helpRequests[0].id, helpId);
+
+    await agent2.post(`/api/teleoperator/help-requests/${helpId}/accept`).expect(200);
+  });
+
+  test('decline-before-connect 409 after robot_proxy_connected_at set', async () => {
+    await pool.query(
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65518,
+      teleopSecret,
+    });
+    const robotId = reg.id;
+
+    const h = await request(app)
+      .post(`/api/robots/${robotId}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'd2', metadata: {} })
+      .expect(201);
+    const helpId = h.body.helpRequest.id;
+
+    const agent = request.agent(app);
+    const w = Keypair.generate().publicKey.toBase58();
+    await agent
+      .post('/api/teleoperator/register')
+      .send({ login: 'decl3', password: 'password12', walletPublicKey: w })
+      .expect(201);
+    const acc = await agent.post(`/api/teleoperator/help-requests/${helpId}/accept`).expect(200);
+    const sessionId = acc.body.session.id;
+
+    await pool.query(
+      `UPDATE teleop_sessions SET robot_proxy_connected_at = NOW() WHERE id = $1`,
+      [sessionId],
+    );
+
+    await agent.post(`/api/teleoperator/sessions/${sessionId}/decline-before-connect`).expect(409);
+  });
+
+  test('POST sessions end: 409 when proxy not connected; idempotent after end', async () => {
+    await pool.query(
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65517,
+      teleopSecret,
+    });
+    const robotId = reg.id;
+
+    const h = await request(app)
+      .post(`/api/robots/${robotId}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'end1', metadata: {} })
+      .expect(201);
+    const helpId = h.body.helpRequest.id;
+
+    const agent = request.agent(app);
+    const w = Keypair.generate().publicKey.toBase58();
+    await agent
+      .post('/api/teleoperator/register')
+      .send({ login: 'endop', password: 'password12', walletPublicKey: w })
+      .expect(201);
+    const acc = await agent.post(`/api/teleoperator/help-requests/${helpId}/accept`).expect(200);
+    const sessionId = acc.body.session.id;
+
+    const bad = await agent
+      .post(`/api/teleoperator/sessions/${sessionId}/end`)
+      .send({ reason: 'graceful_complete' })
+      .expect(409);
+    assert.match(String(bad.body.error || ''), /decline-before-connect/i);
+
+    await pool.query(
+      `UPDATE teleop_sessions SET robot_proxy_connected_at = NOW() WHERE id = $1`,
+      [sessionId],
+    );
+
+    const ok = await agent
+      .post(`/api/teleoperator/sessions/${sessionId}/end`)
+      .send({ reason: 'graceful_complete' })
+      .expect(200);
+    assert.equal(ok.body.ok, true);
+    assert.equal(ok.body.idempotent, false);
+    assert.equal(ok.body.reason, 'graceful_complete');
+
+    const again = await agent
+      .post(`/api/teleoperator/sessions/${sessionId}/end`)
+      .send({ reason: 'operator_cancelled' })
+      .expect(200);
+    assert.equal(again.body.ok, true);
+    assert.equal(again.body.idempotent, true);
+    assert.equal(again.body.reason, 'graceful_complete');
+
+    const row = await pool.query(`SELECT status FROM help_requests WHERE id = $1`, [helpId]);
+    assert.equal(row.rows[0].status, 'closed');
+  });
+
+  test('POST sessions end 400 on invalid reason', async () => {
+    await pool.query(
+      'TRUNCATE help_request_operator_exclusions, teleop_sessions, help_requests, teleoperator_robot_grants, robots, teleoperators RESTART IDENTITY CASCADE',
+    );
+    await registry.loadFromPersistence();
+
+    const reg = await registry.addRobot({
+      host: '127.0.0.1',
+      port: 65516,
+      teleopSecret,
+    });
+    const h = await request(app)
+      .post(`/api/robots/${reg.id}/teleop/help`)
+      .set('X-Robot-Teleop-Secret', teleopSecret)
+      .send({ message: 'x', metadata: {} })
+      .expect(201);
+    const agent = request.agent(app);
+    const w = Keypair.generate().publicKey.toBase58();
+    await agent
+      .post('/api/teleoperator/register')
+      .send({ login: 'badreason', password: 'password12', walletPublicKey: w })
+      .expect(201);
+    const acc = await agent.post(`/api/teleoperator/help-requests/${h.body.helpRequest.id}/accept`).expect(200);
+    await pool.query(`UPDATE teleop_sessions SET robot_proxy_connected_at = NOW() WHERE id = $1`, [
+      acc.body.session.id,
+    ]);
+    const r = await agent
+      .post(`/api/teleoperator/sessions/${acc.body.session.id}/end`)
+      .send({ reason: 'not_a_valid_reason' })
+      .expect(400);
+    assert.match(String(r.body.error || ''), /reason/i);
   });
 });

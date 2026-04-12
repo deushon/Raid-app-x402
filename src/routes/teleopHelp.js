@@ -7,12 +7,19 @@ const {
   listOpenHelpRequestsForTeleoperator,
   getOpenHelpRequestMeta,
   acceptHelpRequest,
+  declineTeleopSessionBeforeProxy,
+  endTeleopSessionWithOperatorReason,
   updateHelpRequestPeaqClaim,
   getHelpRequestForRobotClaim,
   setHelpRequestTeleopGrant,
   getTeleopSessionGrantForRobot,
   getTeleoperatorWalletPublicKey,
 } = require('../services/teleopHelpRepository');
+const { closeProxyOperatorWebSocket } = require('../ws/teleopProxyWsRegistry');
+const {
+  TELEOP_OPERATOR_END_REASON,
+  isValidSessionEndReason,
+} = require('../utils/teleopOperatorEndReasons');
 const {
   normalizeRobotTeleopHelpBody,
   KyrPeaqContextTooLargeError,
@@ -52,6 +59,31 @@ async function persistPeaqClaimWithFallback(pool, peaqClaimService, helpRequestI
     }
     throw err;
   }
+}
+
+/**
+ * @param {{ teleopHub: object, grantRepository: object | null, row: object, duplicate: boolean }} p
+ */
+async function broadcastHelpRequestToHub({ teleopHub, grantRepository, row, duplicate }) {
+  const event = {
+    type: 'help_request',
+    data: {
+      id: row.id,
+      robotId: row.robot_id,
+      status: row.status,
+      payload: row.payload,
+      createdAt: row.created_at,
+      duplicate,
+    },
+  };
+  let allowedIds = null;
+  if (grantRepository) {
+    const grantCount = await grantRepository.countActiveGrantsForRobot(row.robot_id);
+    if (grantCount > 0) {
+      allowedIds = await grantRepository.listActiveTeleoperatorIdsForRobot(row.robot_id);
+    }
+  }
+  teleopHub.broadcastHelpRequest(event, { allowedTeleoperatorIds: allowedIds });
 }
 
 function readRobotTeleopSecret(req) {
@@ -327,8 +359,10 @@ function createTeleopHelpRouter({
    *       Same authentication as POST teleop/help. After an operator accepts the help request, RAID stores
    *       **teleopGrantPayload** (UTF-8 JSON string) and **teleopGrantSignature** (Ed25519, base58 over raw UTF-8 bytes)
    *       when **TELEOP_GRANT_SIGNING_SECRET_KEY** is configured. Response includes **grantSignerPublicKey** for KYR **trusted_raid_keys** alignment.
-   *       Returns **404** `grant_not_ready` while the request is still open,
-   *       **404** `grant_unconfigured` when signing is disabled, or **404** `grant_absent` if the operator had no wallet pubkey.
+   *       Returns **404** `grant_not_ready` while the request is still **open** (no accept yet), **or** after accept was rolled back
+   *       (e.g. operator **decline-before-connect** returned the request to **open** and cleared grant fields). The robot must treat
+   *       `grant_not_ready` after a prior **200** as **invalidate cached SessionGrant** and continue polling. **404** `grant_unconfigured`
+   *       when signing is disabled, or **404** `grant_absent` if the operator had no wallet pubkey.
    *     parameters:
    *       - in: path
    *         name: robotId
@@ -557,6 +591,158 @@ function createTeleopHelpRouter({
     } catch (error) {
       logger.error('accept help request failed', { error: error.message });
       return res.status(500).json({ error: 'Failed to accept help request' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/teleoperator/sessions/{sessionId}/decline-before-connect:
+   *   post:
+   *     tags:
+   *       - Teleop
+   *     summary: Decline task after brief, before robot proxy WebSocket
+   *     description: >
+   *       Ends the teleop session row, returns the help request to **open**, clears signed SessionGrant fields,
+   *       and excludes this operator from seeing this help request again. Allowed only while **robot_proxy_connected_at**
+   *       is still null (no `/ws/teleop/session/{sessionId}` connection has been established). No operator payment applies.
+   *     security:
+   *       - TeleoperatorCookie: []
+   *       - TeleoperatorBearer: []
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Help request reopened; other operators may accept.
+   *       401:
+   *         description: Not authenticated.
+   *       409:
+   *         description: Session not eligible (wrong operator, already ended, or proxy already connected).
+   */
+  teleopOnly.post('/sessions/:sessionId/decline-before-connect', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!validateUuid(sessionId)) {
+        return res.status(400).json({ error: 'sessionId must be a valid UUID' });
+      }
+      const result = await declineTeleopSessionBeforeProxy(pool, {
+        sessionId,
+        teleoperatorId: req.teleopUser.id,
+        operatorEndReason: TELEOP_OPERATOR_END_REASON.BRIEF_DECLINED_BEFORE_PROXY,
+      });
+      if (!result) {
+        return res.status(409).json({ error: 'Session cannot be declined before connect' });
+      }
+      await broadcastHelpRequestToHub({
+        teleopHub,
+        grantRepository,
+        row: result.helpRequest,
+        duplicate: false,
+      });
+      return res.json({
+        ok: true,
+        helpRequest: {
+          id: result.helpRequest.id,
+          robotId: result.helpRequest.robot_id,
+          status: result.helpRequest.status,
+        },
+      });
+    } catch (error) {
+      logger.error('decline-before-connect failed', { error: error.message });
+      return res.status(500).json({ error: 'Failed to decline session' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/teleoperator/sessions/{sessionId}/end:
+   *   post:
+   *     tags:
+   *       - Teleop
+   *     summary: End an active proxied teleop session with a stable reason
+   *     description: >
+   *       Closes the help request and ends the session after the operator proxy WebSocket has connected
+   *       (**robot_proxy_connected_at** set). Body **`reason`** must be one of **graceful_complete**,
+   *       **operator_cancelled**, **network_quality_abort**, **client_error**. Idempotent if already ended.
+   *       Closes the operator WebSocket if still open. Payment settlement remains on the robot/KYR/x402 side.
+   *     security:
+   *       - TeleoperatorCookie: []
+   *       - TeleoperatorBearer: []
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - reason
+   *             properties:
+   *               reason:
+   *                 type: string
+   *                 enum:
+   *                   - graceful_complete
+   *                   - operator_cancelled
+   *                   - network_quality_abort
+   *                   - client_error
+   *     responses:
+   *       200:
+   *         description: Session ended (or already ended).
+   *       400:
+   *         description: Missing or invalid reason.
+   *       401:
+   *         description: Not authenticated.
+   *       404:
+   *         description: Session not found for this operator.
+   *       409:
+   *         description: Proxy not connected yet (use decline-before-connect) or conflict.
+   */
+  teleopOnly.post('/sessions/:sessionId/end', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!validateUuid(sessionId)) {
+        return res.status(400).json({ error: 'sessionId must be a valid UUID' });
+      }
+      const reason = req.body && req.body.reason;
+      if (!isValidSessionEndReason(reason)) {
+        return res.status(400).json({ error: 'Invalid or missing reason' });
+      }
+      const out = await endTeleopSessionWithOperatorReason(pool, {
+        sessionId,
+        teleoperatorId: req.teleopUser.id,
+        operatorEndReason: reason,
+      });
+      if (!out.ok) {
+        if (out.code === 'not_found') {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+        if (out.code === 'proxy_not_connected') {
+          return res.status(409).json({
+            error: 'Proxy WebSocket was not connected; use POST .../decline-before-connect',
+          });
+        }
+        return res.status(409).json({ error: 'Session cannot be ended' });
+      }
+      closeProxyOperatorWebSocket(sessionId);
+      return res.json({
+        ok: true,
+        idempotent: Boolean(out.idempotent),
+        reason: out.operatorEndReason,
+        helpRequestId: out.helpRequestId,
+      });
+    } catch (error) {
+      logger.error('teleoperator session end failed', { error: error.message });
+      return res.status(500).json({ error: 'Failed to end session' });
     }
   });
 

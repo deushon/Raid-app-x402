@@ -4,6 +4,10 @@ All notable changes to this repository are documented here. Dates use UTC; entri
 
 ## [Unreleased] — week ending 2026-03-31
 
+### Added (2026-04-12)
+
+- **Teleoperator session lifecycle:** **`POST /api/teleoperator/sessions/{sessionId}/decline-before-connect`** (reopen help, exclude operator, clear grant before proxy WS) and **`POST /api/teleoperator/sessions/{sessionId}/end`** with **`reason`** after proxy connected; DB **`help_request_operator_exclusions`**, **`teleop_sessions.robot_proxy_connected_at`**, **`operator_end_reason`**; optional operator WS close via registry. Docs **`VR_TELEOP_SESSION_COMPLETION.md`**, handoff copies under **`TEMP/kyr-handoff/`** and **`TEMP/vr-handoff/`**. Robot spec: expanded **`grant_not_ready`** semantics in **`ROBOT_TELEOP_KYR_RAID_GRANT.md`**.
+
 ### Added (2026-04-10)
 
 - **DATA_NODE provisioning (RAID → robot):** fleet **`DATA_NODE_SYNC_*`** env, per-robot **`data_node_sync_override`** (JSONB), merged **`dataNodeSync`** on **`POST /api/robots/enroll`** and fleet **POST/PUT/refresh** responses (operator-only fields stripped from device JSON). Admin **POST …/sync-operator-allowlist** accepts **`pushAllowlist`** / **`pushDataNodeSync`**; push body matches **TASK_ROUTER_FULL_SINC** / **ROBOT_OPERATOR_SYNC.md**.
