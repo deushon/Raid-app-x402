@@ -41,6 +41,7 @@ const { swaggerSpec, swaggerUi } = require('./docs/swagger');
 const settingsStore = require('./services/settingsStore');
 const servicesRegistrationStore = require('./services/servicesRegistrationStore');
 const { startMdnsAdvertisement } = require('./services/mdnsAdvertisement');
+const { registerPublicTailwindCss } = require('./publicStaticRoutes');
 
 const bootstrap = async () => {
   const config = loadConfig(process.argv.slice(2));
@@ -145,13 +146,16 @@ const bootstrap = async () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  const publicRoot = path.join(__dirname, '..', 'public');
+  registerPublicTailwindCss(app, publicRoot, logger);
+
   // Admin panel: cookie session (login page) + optional Basic on /api/admin only
   // Do not register app.get('/ui') → redirect to '/ui/': in Express 5 that route also matches
   // GET /ui/ and causes an infinite 302 loop. Trailing slash is handled by express.static (301 /ui → /ui/).
   app.use(
     '/ui',
     createAdminUiGuardMiddleware(config.admin),
-    express.static(path.join(__dirname, '..', 'public')),
+    express.static(publicRoot),
   );
 
   // Public client UI
