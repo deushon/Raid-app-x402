@@ -336,6 +336,8 @@ function getAdminView(config) {
     raidToRobotSecretFromFile: Boolean(fileData.raidToRobotSecret),
     fleetEnrollmentSecretFromEnv: Boolean(config?.robots?.fleetEnrollmentSecret),
     fleetEnrollmentSecretFromFile: Boolean(fileData.fleetEnrollmentSecret),
+    /** Same value as ROBOT_FLEET_ENROLLMENT_SECRET (env wins over file). Only for authenticated admin GET. */
+    fleetEnrollmentSecret: getEffectiveFleetEnrollmentSecret(config),
   };
 }
 

@@ -78,6 +78,7 @@ function registerAdminServicesRegistrationRoutes(router, { config, registry }) {
    *     tags:
    *       - Admin
    *     summary: Services registration (masked secrets + effective preview)
+   *     description: Includes **fleetEnrollmentSecret** (plain string or null) for dashboard QR/copy; env overrides file. Other secrets stay boolean flags only.
    *     security:
    *       - AdminSessionCookie: []
    *       - AdminBasic: []

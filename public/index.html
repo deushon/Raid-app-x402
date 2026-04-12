@@ -150,8 +150,11 @@
               </div>
             </div>
             
-            <div class="text-center mt-2">
+            <div class="text-center mt-2 space-y-1">
               <a href="/ui/services-registration.html" class="text-sm text-indigo-400 hover:text-indigo-300">Manage Secrets & Services &rarr;</a>
+              <p class="text-xs text-slate-500 max-w-xs mx-auto">
+                Secret is not auto-generated: set <code class="text-slate-400">ROBOT_FLEET_ENROLLMENT_SECRET</code> in the server env or store it under Services registration (file overlay).
+              </p>
             </div>
           </section>
 
@@ -249,23 +252,32 @@
           if (!res.ok) throw new Error('Could not fetch registration settings');
           const data = await res.json();
           
-          // Determine the secret (env > file > default placeholder)
-          const secret = data.fleetEnrollmentSecretFromEnv || 
-                         data.fleetEnrollmentSecretFromFile || 
-                         "NOT_CONFIGURED";
-                         
+          // Effective secret string (admin-only); FromEnv/FromFile are booleans, not the value.
+          const secret =
+            typeof data.fleetEnrollmentSecret === 'string' && data.fleetEnrollmentSecret.trim() !== ''
+              ? data.fleetEnrollmentSecret.trim()
+              : null;
+
           const displayEl = document.getElementById('enrollment-secret-display');
           const qrContainer = document.getElementById('qrcode-container');
-          
-          // Show hidden representation
-          if (secret === "NOT_CONFIGURED") {
-            displayEl.value = secret;
+          if (!displayEl || !qrContainer) return;
+
+          const sourceHint = [];
+          if (data.fleetEnrollmentSecretFromEnv) sourceHint.push('environment');
+          if (data.fleetEnrollmentSecretFromFile) sourceHint.push('services-registration file');
+
+          if (!secret) {
+            displayEl.value =
+              'Not set — add ROBOT_FLEET_ENROLLMENT_SECRET or save in Services registration';
             displayEl.classList.add('text-red-400');
-            qrContainer.innerHTML = '<div class="w-40 h-40 bg-slate-100 flex items-center justify-center text-red-500 font-bold text-sm text-center px-4">Secret Not Configured</div>';
+            qrContainer.innerHTML =
+              '<div class="w-40 h-40 bg-slate-100 flex flex-col items-center justify-center text-red-500 text-xs text-center px-3 gap-1"><span>Not configured</span><span class="text-slate-500 font-normal">Set env or /ui/services-registration</span></div>';
           } else {
-            // Only show part of it
-            const masked = secret.substring(0, 4) + '••••••••' + secret.substring(secret.length - 4);
-            displayEl.value = masked;
+            const masked =
+              secret.length <= 8
+                ? '••••••••'
+                : secret.substring(0, 4) + '••••••••' + secret.substring(secret.length - 4);
+            displayEl.value = masked + (sourceHint.length ? ' (' + sourceHint.join(' + ') + ')' : '');
             
             // Store full secret in dataset for copying
             displayEl.dataset.fullSecret = secret;
