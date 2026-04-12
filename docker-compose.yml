@@ -33,7 +33,10 @@ services:
       start_period: 5s
 
   app:
-    build: .
+    build:
+      context: .
+      # Use host DNS during image build (avoids EAI_AGAIN for registry.npmjs.org on some Docker setups).
+      network: host
     restart: unless-stopped
     # mDNS (MDNS_ENABLED): on default bridge, multicast from the host often does not reach the container.
     # For LAN advertisement use network_mode: host (then reconcile or remove ports).
