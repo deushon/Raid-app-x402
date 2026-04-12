@@ -22,9 +22,10 @@ services:
       POSTGRES_DB: x402raid
     volumes:
       - x402_raid_pgdata:/var/lib/postgresql/data
-    # Localhost on the host only (127.0.0.1). The app container uses postgres:5432.
+    # Published to host on 127.0.0.1 only. Default host port 5436 avoids collisions when this
+    # server also runs other Postgres stacks (e.g. 5432/5433/5434 already in use). App container still uses postgres:5432.
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5436:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U x402 -d x402raid"]
       interval: 3s
@@ -40,9 +41,9 @@ services:
     restart: unless-stopped
     # mDNS (MDNS_ENABLED): on default bridge, multicast from the host often does not reach the container.
     # For LAN advertisement use network_mode: host (then reconcile or remove ports).
-    # Bind on all host interfaces — reachable by server IP/domain, not only localhost
+    # Host port defaults to 3001 when APP_HOST_PORT unset (3000 often used by other stacks on shared servers).
     ports:
-      - "0.0.0.0:${APP_HOST_PORT:-3000}:3000"
+      - "0.0.0.0:${APP_HOST_PORT:-3001}:3000"
     env_file: .env
     environment:
       HOST: 0.0.0.0

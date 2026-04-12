@@ -43,7 +43,7 @@ docker compose up -d --build
 - The **`config/`** directory is mounted into the container: `client-settings.json`, `ai-agent.json`, etc. persist on the host.
 - **PostgreSQL** data lives in the named volume **`x402_raid_pgdata`** (robots, teleoperators, help requests survive image rebuilds). **Do not** use `docker compose down -v` if you need to keep users and robots — **`-v` deletes the volume and all data**. Normal stop: `docker compose down` **without** `-v`.
 - **`docker compose up -d --build` and host reboot alone do not clear tables** — on startup the app only creates/extends schema (`IF NOT EXISTS`), no `TRUNCATE`/`DROP` on production data.
-- If robots and operators “suddenly” disappear, common causes: (1) **`docker compose down -v`** or **`docker volume prune`** was run; (2) **`npm test`** on the same host with **`TEST_DATABASE_URL`** pointing at the **same Postgres** exposed on **`localhost:5434`** — tests run **`TRUNCATE … CASCADE`** on teleop and robot tables; (3) the repo folder was **renamed or cloned elsewhere** — Docker Compose project name changes → **new empty volume** (see `docker volume ls | grep x402`). On a server, **do not** keep `TEST_DATABASE_URL` in `.env` or export it in your shell if compose Postgres runs on the same host.
+- If robots and operators “suddenly” disappear, common causes: (1) **`docker compose down -v`** or **`docker volume prune`** was run; (2) **`npm test`** on the same host with **`TEST_DATABASE_URL`** pointing at the **same Postgres** exposed on **`localhost:5436`** — tests run **`TRUNCATE … CASCADE`** on teleop and robot tables; (3) the repo folder was **renamed or cloned elsewhere** — Docker Compose project name changes → **new empty volume** (see `docker volume ls | grep x402`). On a server, **do not** keep `TEST_DATABASE_URL` in `.env` or export it in your shell if compose Postgres runs on the same host.
 
 - Logs: `docker compose logs -f app`
 - Stop: `docker compose down`
@@ -56,14 +56,14 @@ The image is built from [`Dockerfile`](Dockerfile) at the repo root.
 npm install
 cp config/env.example .env
 docker compose up -d postgres   # database only
-# in .env: DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
+# in .env: DATABASE_URL=postgres://x402:x402@localhost:5436/x402raid
 npm run start                # production
 npm run dev                  # nodemon
 ```
 
 The server listens on **`HOST`** / **`PORT`**. Default **`HOST=0.0.0.0`** is **not** “localhost only”: the process accepts connections on **all** interfaces; from another machine use **`http://<public-IP-or-DNS>:3000`** (port from `PORT` / `APP_HOST_PORT` in Docker). Examples with `localhost` in docs are for checks **from the server itself**. If you set **`HOST=127.0.0.1`**, the network cannot reach it (a warning is logged).
 
-**PostgreSQL (compose):** port **5434** is bound to **`127.0.0.1`** on the host (local access only, not from the internet). User `x402`, password `x402`, database `x402raid`. For `npm run` on the host: `DATABASE_URL=...localhost:5434...`. The `app` container uses internal address `postgres:5432`. On startup, tables **`teleoperators`**, **`robots`**, **`help_requests`** (including **`peaq_claim`** JSONB for teleop Peaq), **`teleop_sessions`**, **`teleoperator_robot_grants`** (teleoperator↔robot ACL) are created.
+**PostgreSQL (compose):** port **5436** is bound to **`127.0.0.1`** on the host (local access only, not from the internet). User `x402`, password `x402`, database `x402raid`. For `npm run` on the host: `DATABASE_URL=...localhost:5436...`. The `app` container uses internal address `postgres:5432`. On startup, tables **`teleoperators`**, **`robots`**, **`help_requests`** (including **`peaq_claim`** JSONB for teleop Peaq), **`teleop_sessions`**, **`teleoperator_robot_grants`** (teleoperator↔robot ACL) are created.
 
 **Option C — systemd without Docker (sample unit)**  
 Template: [`deploy/task-router-x402.service.example`](deploy/task-router-x402.service.example) — copy to `/etc/systemd/system/`, adjust paths and `User=`, then `sudo systemctl enable --now task-router-x402`.
@@ -282,10 +282,10 @@ npm run dev
 npm test
 ```
 
-Host with Postgres only from compose (port **5434** on localhost) uses in `.env`:
+Host with Postgres only from compose (port **5436** on localhost) uses in `.env`:
 
 ```bash
-DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
+DATABASE_URL=postgres://x402:x402@localhost:5436/x402raid
 ```
 
 **Locale guard:** `test/no-cyrillic-in-repo.test.js` fails if Cyrillic appears under `src/`, `public/`, `docs/`, `config/`, etc. (public repo policy; see [CONTRIBUTING.md](CONTRIBUTING.md)). Local `.env` is not scanned.
@@ -293,7 +293,7 @@ DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
 Tests **do not read** `DATABASE_URL`: integration suites use only **`TEST_DATABASE_URL`**. If unset, those tests are skipped and `npm test` still passes. Example using the same DB as in `config/env.example` (do **not** point at production — tests **`TRUNCATE`**):
 
 ```bash
-export TEST_DATABASE_URL=postgres://x402:x402@localhost:5434/x402raid
+export TEST_DATABASE_URL=postgres://x402:x402@localhost:5436/x402raid
 docker compose up -d postgres   # or full stack
 npm test
 ```
