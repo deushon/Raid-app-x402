@@ -1,14 +1,22 @@
 # Changelog
 
-All notable changes to this repository are documented here. Dates use UTC; entries reflect work merged **2026-03-24 through 2026-03-31** (suitable for a fork PR summary).
+All notable changes to this repository are documented here. Dates use commit dates (UTC).
 
-## [Unreleased] — week ending 2026-03-31
+## [Unreleased]
 
-### Added (2026-04-12)
+### Week of 2026-04-07 – 2026-04-13 (PR / public snapshot)
 
-- **Teleoperator session lifecycle:** **`POST /api/teleoperator/sessions/{sessionId}/decline-before-connect`** (reopen help, exclude operator, clear grant before proxy WS) and **`POST /api/teleoperator/sessions/{sessionId}/end`** with **`reason`** after proxy connected; DB **`help_request_operator_exclusions`**, **`teleop_sessions.robot_proxy_connected_at`**, **`operator_end_reason`**; optional operator WS close via registry. Docs **`VR_TELEOP_SESSION_COMPLETION.md`**, handoff copies under **`TEMP/kyr-handoff/`** and **`TEMP/vr-handoff/`**. Robot spec: expanded **`grant_not_ready`** semantics in **`ROBOT_TELEOP_KYR_RAID_GRANT.md`**.
+Summary of merged work suitable for reviewers and release notes.
 
-### Added (2026-04-10)
+- **2026-04-13 — Dev + admin:** local dev scripts (`scripts/dev-local-up.sh`, `rebuild-local.sh`) and **host Postgres** notes in **`config/env.example`**; **Services registration** — fleet enrollment / RAID-to-robot **secret rotation** APIs, admin UI, and partner-oriented docs.
+- **2026-04-12 — Docker & HTTP:** default **host port 3000** for the app; **non-conflicting** alternate compose ports for shared servers; Docker build uses **host network**; **`GET /styles.css`** serves the Tailwind bundle for public UIs.
+- **2026-04-12 — Teleoperator VR lifecycle:** **`POST /api/teleoperator/sessions/{sessionId}/decline-before-connect`** and **`…/end`** with **`reason`**; DB support (**`help_request_operator_exclusions`**, **`teleop_sessions.robot_proxy_connected_at`**, **`operator_end_reason`**); **`fix(admin)`** fleet enrollment secret in API and dashboard JS guards.
+- **2026-04-12 — UI:** MVP refactor with **Tailwind CSS**; Homebrew **co-brand**, **favicon**, **`/client`** demo cards.
+- **2026-04-10 — DATA_NODE & teleop:** fleet **`DATA_NODE_SYNC_*`** and per-robot **`dataNodeSync`** provisioning; optional **`DATA_NODE_INCIDENT_RELAY_*`**; required teleop **`metadata`**; **Services registration** UI/API (first tranche); **DATA_NODE correlation** fields on help metadata; compose/Docker fixes (**npm 11**, teleoperator static assets from **`public/`**).
+
+### Earlier in [Unreleased]
+
+- **Teleoperator session lifecycle (detail):** **`POST /api/teleoperator/sessions/{sessionId}/decline-before-connect`** (reopen help, exclude operator, clear grant before proxy WS) and **`POST /api/teleoperator/sessions/{sessionId}/end`** with **`reason`** after proxy connected; optional operator WS close via registry. Docs **`VR_TELEOP_SESSION_COMPLETION.md`**, handoff copies under **`TEMP/kyr-handoff/`** and **`TEMP/vr-handoff/`**. Robot spec: expanded **`grant_not_ready`** semantics in **`ROBOT_TELEOP_KYR_RAID_GRANT.md`**.
 
 - **DATA_NODE provisioning (RAID → robot):** fleet **`DATA_NODE_SYNC_*`** env, per-robot **`data_node_sync_override`** (JSONB), merged **`dataNodeSync`** on **`POST /api/robots/enroll`** and fleet **POST/PUT/refresh** responses (operator-only fields stripped from device JSON). Admin **POST …/sync-operator-allowlist** accepts **`pushAllowlist`** / **`pushDataNodeSync`**; push body matches **TASK_ROUTER_FULL_SINC** / **ROBOT_OPERATOR_SYNC.md**.
 - **Optional help → DATA_NODE relay:** **`DATA_NODE_INCIDENT_RELAY_*`** best-effort POST on new help requests (non-duplicate); failures do not block help.
