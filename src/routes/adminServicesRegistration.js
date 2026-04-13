@@ -70,6 +70,13 @@ function resolveFleetForProbe(config, body) {
  * @param {import('express').Router} router
  * @param {{ config: object, registry: object|null }} deps
  */
+/**
+ * @param {unknown} error
+ */
+function isFsPermissionError(error) {
+  return Boolean(error && typeof error === 'object' && (error.code === 'EACCES' || error.code === 'EPERM'));
+}
+
 function registerAdminServicesRegistrationRoutes(router, { config, registry }) {
   /**
    * @openapi
@@ -109,7 +116,119 @@ function registerAdminServicesRegistrationRoutes(router, { config, registry }) {
       res.json({ ok: true, ...servicesRegistrationStore.getAdminView(config) });
     } catch (error) {
       logger.error('services-registration put failed', { error: error.message });
+      if (isFsPermissionError(error)) {
+        return res.status(503).json({ error: error.message });
+      }
       res.status(400).json({ error: error.message || 'Invalid body' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/admin/services-registration/rotate-fleet-enrollment-secret:
+   *   post:
+   *     tags:
+   *       - Admin
+   *     summary: Rotate fleet enrollment secret in services-registration file
+   *     description: |
+   *       Writes a new random **fleetEnrollmentSecret** to **config/services-registration.json**.
+   *       Returns **409** if **ROBOT_FLEET_ENROLLMENT_SECRET** is set in server environment (env wins; change .env instead).
+   *       Robots must use the new value for **POST /api/robots/enroll** after rotation.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - confirm
+   *             properties:
+   *               confirm:
+   *                 type: boolean
+   *                 description: Must be true
+   *     responses:
+   *       200:
+   *         description: New secret is effective (file-backed) and included in **fleetEnrollmentSecret** in the JSON body.
+   *       400:
+   *         description: confirm was not true.
+   *       409:
+   *         description: Env overrides file; rotation refused.
+   */
+  router.post('/services-registration/rotate-fleet-enrollment-secret', (req, res) => {
+    if (!req.body || req.body.confirm !== true) {
+      return res.status(400).json({ error: 'JSON body must include "confirm": true' });
+    }
+    try {
+      servicesRegistrationStore.rotateFleetEnrollmentSecretInFile(config);
+      res.json({ ok: true, ...servicesRegistrationStore.getAdminView(config) });
+    } catch (error) {
+      if (error.code === 'SECRET_FROM_ENV') {
+        return res.status(409).json({ error: error.message });
+      }
+      if (isFsPermissionError(error)) {
+        return res.status(503).json({ error: error.message });
+      }
+      logger.error('rotate-fleet-enrollment-secret failed', { error: error.message });
+      return res.status(500).json({ error: error.message || 'Rotation failed' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/admin/services-registration/rotate-raid-to-robot-secret:
+   *   post:
+   *     tags:
+   *       - Admin
+   *     summary: Rotate RAID→robot secret in services-registration file
+   *     description: |
+   *       Writes a new random **raidToRobotSecret** to **config/services-registration.json** (header **X-Raid-To-Robot-Secret**).
+   *       Returns **409** if **RAID_TO_ROBOT_SECRET** is set in server environment.
+   *       Robots must accept the new header value on **operatorRegistryUrl** after rotation.
+   *     security:
+   *       - AdminSessionCookie: []
+   *       - AdminBasic: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - confirm
+   *             properties:
+   *               confirm:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Response includes **raidToRobotSecretPlain** once; update robot **operatorRegistryUrl** handler config. Other secrets in the body follow normal admin view rules.
+   *       400:
+   *         description: confirm was not true.
+   *       409:
+   *         description: Env overrides file; rotation refused.
+   */
+  router.post('/services-registration/rotate-raid-to-robot-secret', (req, res) => {
+    if (!req.body || req.body.confirm !== true) {
+      return res.status(400).json({ error: 'JSON body must include "confirm": true' });
+    }
+    try {
+      const plain = servicesRegistrationStore.rotateRaidToRobotSecretInFile(config);
+      res.json({
+        ok: true,
+        ...servicesRegistrationStore.getAdminView(config),
+        raidToRobotSecretPlain: plain,
+      });
+    } catch (error) {
+      if (error.code === 'SECRET_FROM_ENV') {
+        return res.status(409).json({ error: error.message });
+      }
+      if (isFsPermissionError(error)) {
+        return res.status(503).json({ error: error.message });
+      }
+      logger.error('rotate-raid-to-robot-secret failed', { error: error.message });
+      return res.status(500).json({ error: error.message || 'Rotation failed' });
     }
   });
 

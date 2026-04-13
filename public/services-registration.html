@@ -154,8 +154,23 @@
               Global Secrets
             </h2>
             <p class="text-sm text-slate-400 mb-4">
-              Manage shared authentication secrets across the fleet.
+              Two different shared secrets (see below). Environment variables override values stored in <code class="text-slate-500">config/services-registration.json</code>.
             </p>
+
+            <div class="mb-4 rounded-lg border border-slate-700/60 bg-slate-900/40 p-3 text-xs text-slate-400 space-y-2">
+              <p>
+                <strong class="text-slate-300">Fleet enrollment</strong> — robot → Task Router for
+                <code class="text-slate-500">POST /api/robots/enroll</code> with
+                <code class="text-slate-500">X-Robot-Fleet-Secret</code> or Bearer. Shown as QR on the admin dashboard.
+              </p>
+              <p>
+                <strong class="text-slate-300">RAID → robot</strong> — Task Router → robot
+                <code class="text-slate-500">operatorRegistryUrl</code> (allowlist / optional DATA_NODE sync). Header
+                <code class="text-slate-500">X-Raid-To-Robot-Secret</code>. Not used for enroll.
+              </p>
+            </div>
+
+            <div id="secrets-env-banner" class="hidden mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"></div>
 
             <form id="secrets-form" class="space-y-4">
               <div>
@@ -169,7 +184,7 @@
               <div>
                 <label class="label-text flex items-center justify-between">
                   <span>Fleet Enrollment Secret</span>
-                  <span class="text-[10px] uppercase tracking-wide bg-slate-800 px-2 py-0.5 rounded text-slate-500">Used in QR Code</span>
+                  <span class="text-[10px] uppercase tracking-wide bg-slate-800 px-2 py-0.5 rounded text-slate-500">Enroll / dashboard QR</span>
                 </label>
                 <input name="fleetEnrollmentSecret" id="sec-fleet" type="password" class="input-field" placeholder="Leave empty to keep current" autocomplete="off" />
               </div>
@@ -177,6 +192,21 @@
               <button type="submit" class="btn-secondary w-full">Update Secrets</button>
             </form>
             <div id="secrets-message" class="hidden mt-3 p-2 rounded text-sm text-center"></div>
+
+            <div class="mt-4 pt-4 border-t border-slate-700/50 space-y-3">
+              <p class="text-xs text-slate-500">
+                Regenerate a random secret and save it to the registration file only. If the same setting exists in <code class="text-slate-400">.env</code>, the server keeps using the env value until you change it there and restart.
+              </p>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <button type="button" id="btn-rotate-fleet" class="btn-secondary text-sm py-2">
+                  Regenerate fleet enrollment secret…
+                </button>
+                <button type="button" id="btn-rotate-raid" class="btn-secondary text-sm py-2">
+                  Regenerate RAID→robot secret…
+                </button>
+              </div>
+              <div id="rotate-once-hint" class="hidden text-xs text-amber-400 font-mono break-all bg-slate-950/80 border border-amber-500/20 rounded-lg p-2"></div>
+            </div>
           </section>
 
           <!-- Relay settings (Optional) -->
@@ -257,6 +287,18 @@
         },
         testRobot(body) {
           return this.request('/api/admin/services-registration/test-robot-registry', { method: 'POST', body });
+        },
+        rotateFleetEnrollment() {
+          return this.request('/api/admin/services-registration/rotate-fleet-enrollment-secret', {
+            method: 'POST',
+            body: { confirm: true },
+          });
+        },
+        rotateRaidToRobot() {
+          return this.request('/api/admin/services-registration/rotate-raid-to-robot-secret', {
+            method: 'POST',
+            body: { confirm: true },
+          });
         },
         listRobots() {
           return this.request('/api/admin/robots');
@@ -367,6 +409,21 @@
         applyRelayFromServer(data.dataNodeIncidentRelayFile);
         document.getElementById('status-line').textContent =
           'Loaded state v' + (data.version || 1);
+
+        const envBanner = document.getElementById('secrets-env-banner');
+        if (data.fleetEnrollmentSecretFromEnv || data.raidToRobotSecretFromEnv) {
+          const parts = [];
+          if (data.fleetEnrollmentSecretFromEnv) parts.push('ROBOT_FLEET_ENROLLMENT_SECRET');
+          if (data.raidToRobotSecretFromEnv) parts.push('RAID_TO_ROBOT_SECRET');
+          envBanner.textContent =
+            'Effective value(s) come from server environment (.env): ' +
+            parts.join(', ') +
+            '. Buttons below only update the file; they are disabled by the API while env overrides. To rotate in production, edit .env and restart, then update each robot.';
+          envBanner.classList.remove('hidden');
+        } else {
+          envBanner.classList.add('hidden');
+        }
+
         return data;
       }
 
@@ -414,6 +471,62 @@
           document.getElementById('sec-raid').value = '';
           document.getElementById('sec-fleet').value = '';
           setMessage(msg, 'Secrets updated successfully', 'success');
+          await refresh();
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      function showRotateOnceHint(text) {
+        const el = document.getElementById('rotate-once-hint');
+        el.textContent = text;
+        el.classList.remove('hidden');
+      }
+
+      document.getElementById('btn-rotate-fleet').addEventListener('click', async () => {
+        const msg = document.getElementById('secrets-message');
+        if (
+          !confirm(
+            'Generate a new fleet enrollment secret in services-registration.json? Every robot must use the new value for POST /api/robots/enroll (update robot .env or launch config). Continue?',
+          )
+        ) {
+          return;
+        }
+        try {
+          const res = await api.rotateFleetEnrollment();
+          const plain =
+            typeof res.fleetEnrollmentSecret === 'string' && res.fleetEnrollmentSecret.trim() !== ''
+              ? res.fleetEnrollmentSecret.trim()
+              : '';
+          if (plain) {
+            showRotateOnceHint('New fleet enrollment secret (copy now): ' + plain);
+          }
+          setMessage(msg, 'Fleet enrollment secret rotated in file.', 'success');
+          await refresh();
+        } catch (e) {
+          setMessage(msg, e.message, 'error');
+        }
+      });
+
+      document.getElementById('btn-rotate-raid').addEventListener('click', async () => {
+        const msg = document.getElementById('secrets-message');
+        if (
+          !confirm(
+            'Generate a new RAID→robot secret in services-registration.json? Robots must accept the new X-Raid-To-Robot-Secret on operatorRegistryUrl. Continue?',
+          )
+        ) {
+          return;
+        }
+        try {
+          const res = await api.rotateRaidToRobot();
+          const plain =
+            typeof res.raidToRobotSecretPlain === 'string' && res.raidToRobotSecretPlain.trim() !== ''
+              ? res.raidToRobotSecretPlain.trim()
+              : '';
+          if (plain) {
+            showRotateOnceHint('New RAID→robot secret (copy now): ' + plain);
+          }
+          setMessage(msg, 'RAID→robot secret rotated in file.', 'success');
           await refresh();
         } catch (e) {
           setMessage(msg, e.message, 'error');

@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { randomBytes } = require('crypto');
 const logger = require('../utils/logger');
 
 const REG_FILE = path.join(process.cwd(), 'config', 'services-registration.json');
@@ -42,8 +43,19 @@ function persist() {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(REG_FILE, JSON.stringify(fileData, null, 2), 'utf8');
-  logger.info('Services registration saved', { file: REG_FILE });
+  try {
+    fs.writeFileSync(REG_FILE, JSON.stringify(fileData, null, 2), 'utf8');
+    logger.info('Services registration saved', { file: REG_FILE });
+  } catch (e) {
+    if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
+      const err = new Error(
+        `Cannot write ${REG_FILE}: permission denied. The file must be owned by the user running the server (not root). Example: sudo chown "$(whoami)" "${REG_FILE}"`,
+      );
+      err.code = e.code;
+      throw err;
+    }
+    throw e;
+  }
 }
 
 /**
@@ -241,6 +253,48 @@ function patchIncidentRelayFromBody(prev, raw) {
  * Secret rule: key present + empty string → remove from file; key absent → unchanged; non-empty → store.
  * @param {Record<string, unknown>} body
  */
+/**
+ * @param {object} config
+ * @returns {string} New plaintext secret (persisted to file only).
+ */
+function rotateFleetEnrollmentSecretInFile(config) {
+  const env = config?.robots?.fleetEnrollmentSecret;
+  if (env != null && String(env).trim() !== '') {
+    const err = new Error(
+      'ROBOT_FLEET_ENROLLMENT_SECRET is set in server environment. Update or remove it in .env and restart to change the effective enrollment secret; file-only rotation is disabled while env overrides.',
+    );
+    err.code = 'SECRET_FROM_ENV';
+    throw err;
+  }
+  const next = randomBytes(32).toString('hex');
+  fileData.fleetEnrollmentSecret = next;
+  fileData.version = 1;
+  persist();
+  loadFromDisk();
+  return next;
+}
+
+/**
+ * @param {object} config
+ * @returns {string} New plaintext secret (persisted to file only).
+ */
+function rotateRaidToRobotSecretInFile(config) {
+  const env = config?.robots?.raidToRobotSecret;
+  if (env != null && String(env).trim() !== '') {
+    const err = new Error(
+      'RAID_TO_ROBOT_SECRET is set in server environment. Update or remove it in .env and restart to change the effective RAID→robot secret; file-only rotation is disabled while env overrides.',
+    );
+    err.code = 'SECRET_FROM_ENV';
+    throw err;
+  }
+  const next = randomBytes(32).toString('hex');
+  fileData.raidToRobotSecret = next;
+  fileData.version = 1;
+  persist();
+  loadFromDisk();
+  return next;
+}
+
 function saveFromAdminBody(body) {
   if (!isPlainObject(body)) {
     throw new Error('Body must be a JSON object');
@@ -350,5 +404,7 @@ module.exports = {
   getMergedIncidentRelay,
   saveFromAdminBody,
   getAdminView,
+  rotateFleetEnrollmentSecretInFile,
+  rotateRaidToRobotSecretInFile,
   REG_FILE,
 };

@@ -131,8 +131,13 @@
               </h2>
             </div>
             
-            <p class="text-sm text-slate-400 mb-6">
-              Robots auto-register using the Task Router enrollment secret. Scan this QR code or copy the secret to configure a new robot.
+            <p class="text-sm text-slate-400 mb-4">
+              Robots call RAID <code class="text-slate-500">POST /api/robots/enroll</code> using the <strong class="text-slate-300">fleet enrollment</strong> secret (QR below). That is <strong class="text-slate-300">not</strong> the same as <strong class="text-slate-300">RAID→robot</strong> (<code class="text-slate-500">X-Raid-To-Robot-Secret</code>), which RAID uses only when pushing the teleop allowlist to the robot&rsquo;s <code class="text-slate-500">operatorRegistryUrl</code>. See
+              <a href="/ui/services-registration.html" class="text-indigo-400 hover:text-indigo-300">Services registration</a>
+              or <code class="text-slate-500">docs/SERVICES_REGISTRATION_ROBOT.md</code>.
+            </p>
+            <p class="text-xs text-slate-500 mb-6">
+              After a database reset, robots do not reappear until each node enrolls again (or you add them in admin). Clipboard copy may require HTTPS or localhost; if copy fails, scan the QR or open Services registration.
             </p>
             
             <div class="bg-slate-900 rounded-xl p-6 border border-slate-700 flex flex-col items-center justify-center mb-4">
@@ -247,6 +252,32 @@
     
     <!-- Inline script to handle the dashboard specifics before loading app.js -->
     <script>
+      async function copyTextToClipboard(text) {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch (_) {
+          /* fall through */
+        }
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          return ok;
+        } catch (_) {
+          return false;
+        }
+      }
+
       // Load enrollment secret for QR
       document.addEventListener('DOMContentLoaded', async () => {
         try {
@@ -296,14 +327,19 @@
               correctLevel : QRCode.CorrectLevel.M
             });
             
-            // Setup copy button
-            document.getElementById('copy-secret-btn').addEventListener('click', () => {
-              navigator.clipboard.writeText(secret).then(() => {
-                const btn = document.getElementById('copy-secret-btn');
-                const origHtml = btn.innerHTML;
-                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
-                setTimeout(() => { btn.innerHTML = origHtml; }, 2000);
-              });
+            const copyBtn = document.getElementById('copy-secret-btn');
+            copyBtn.addEventListener('click', async () => {
+              const toCopy = displayEl.dataset.fullSecret || secret;
+              const ok = await copyTextToClipboard(toCopy);
+              const origHtml = copyBtn.innerHTML;
+              if (ok) {
+                copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+                setTimeout(() => { copyBtn.innerHTML = origHtml; }, 2000);
+              } else {
+                window.alert(
+                  'Could not copy (browser may block clipboard on HTTP). Use the QR code, or copy from Services registration / your .env.',
+                );
+              }
             });
           }
           
