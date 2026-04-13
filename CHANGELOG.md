@@ -43,7 +43,7 @@ Summary of merged work suitable for reviewers and release notes.
 - **Admin panel:** JWT cookie session (**`POST /api/admin/login`**) with optional HTTP Basic for **`/api/admin/*`**; static **`/ui`** guard aligned with session.
 - **Docker:** compose stack for app + Postgres, persistent volume **`x402_raid_pgdata`**; **`Dockerfile`** for single-port image.
 - **Documentation layout:** **`CLIENT_UI.md`**, **`RAID_APP_TELEOP_HELP_SPEC.md`**, **`DATA_NODE_OPERATOR_SESSION_SPEC.md`** moved under **`docs/`**; README **documentation index** with cross-links.
-- **Maintainer automation:** tracked **`AGENTS.md`** removed from the public tree; **`AGENTS.md`** is **gitignored** for local use; public rules summarized in **`CONTRIBUTING.md`**.
+- **Agent / contributor map:** **`AGENTS.md`** is **versioned** in the repository (documentation map for AI assistants; keep in sync with **`README.md`** and **`CONTRIBUTING.md`**).
 
 ### Fixed / hardened
 
