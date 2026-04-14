@@ -4,6 +4,10 @@ All notable changes to this repository are documented here. Dates use commit dat
 
 ## [Unreleased]
 
+### Sprint 3 closeout coordination (engineering)
+
+- **DATA_NODE** adds **`GET /v1/robots/{robot_id}/stats`** for cloud-visible aggregates (sessions / robot-events / incidents). The Task Router OpenAPI **still** does not expose **`GET /api/robots/{robotId}/stats`** by design ([`test/sprint-inventory-openapi.test.js`](test/sprint-inventory-openapi.test.js)); use DATA_NODE for that stats surface or add a thin proxy in a future release if required.
+
 ### Week of 2026-04-07 – 2026-04-13 (PR / public snapshot)
 
 Summary of merged work suitable for reviewers and release notes.
